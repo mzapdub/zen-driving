@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#151c18" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath fill='%23e7b35c' d='M31 4 7 56h50L33 4z'/%3E%3Cpath fill='%23151c18' d='M29 20h6v30h-6z'/%3E%3C/svg%3E" />
+    <meta name="description" content="Zen Driving — an endless procedural road runner with rhythmic oncoming traffic, dynamic worlds, weather, and an old late-night DJ." />
+    <title>Zen Driving — Endless Procedural Road</title>
+  </head>
+  <body>
+    <main id="app" aria-label="Zen Driving endless runner">
+      <canvas id="scene" aria-label="Zen Driving endless procedural mountain road"></canvas>
+      <div id="motion-blur" aria-hidden="true"></div>
+      <div id="lens-effects" aria-hidden="true"></div>
+      <div id="transition" aria-hidden="true"></div>
+      <section id="loading" aria-live="polite">
+        <div class="brand-lockup brand-lockup-loading">
+          <img class="brand-logo" src="/assets/zen-driving-logo-v1.png" alt="" aria-hidden="true" />
+          <h1 class="brand-name">Zen Driving</h1>
+        </div>
+        <p id="loading-status">Preparing the road…</p>
+      </section>
+      <section id="main-menu" hidden role="dialog" aria-modal="true" aria-labelledby="menu-title">
+        <div class="brand-lockup brand-lockup-menu">
+          <img class="brand-logo" src="/assets/zen-driving-logo-v1.png" alt="" aria-hidden="true" />
+          <h1 id="menu-title" class="brand-name">Zen Driving</h1>
+        </div>
+        <p class="menu-copy">Dodge oncoming traffic. Chase the horizon. Choose the machine that carries you there.</p>
+        <section id="garage" class="garage" aria-labelledby="garage-title">
+          <div class="garage-heading">
+            <div>
+              <p class="eyebrow">ROADSIDE GARAGE</p>
+              <h2 id="garage-title">Choose your ride</h2>
+            </div>
+            <output id="garage-status" aria-live="polite">Sports wagon · Crimson</output>
+          </div>
+          <div id="vehicle-preview" class="vehicle-preview" aria-label="Rotating 3D preview of the selected vehicle">
+            <canvas id="vehicle-preview-canvas" aria-hidden="true"></canvas>
+            <p class="vehicle-preview-fallback" data-preview-fallback hidden>3D preview unavailable — your selected vehicle will still load in the drive.</p>
+            <span class="vehicle-preview-caption" aria-hidden="true">LIVE 3D TURNTABLE</span>
+          </div>
+          <fieldset class="garage-fieldset">
+            <legend>Vehicle</legend>
+            <div class="vehicle-options">
+              <input class="garage-radio" type="radio" name="vehicle-type" id="vehicle-sports-wagon" value="sports_wagon" checked />
+              <label for="vehicle-sports-wagon" data-vehicle="sports_wagon">
+                <span class="vehicle-silhouette" aria-hidden="true"><i></i></span>
+                <strong>Sports wagon</strong>
+                <small>STABLE · FAST</small>
+              </label>
+              <input class="garage-radio" type="radio" name="vehicle-type" id="vehicle-rally-coupe" value="rally_coupe" />
+              <label for="vehicle-rally-coupe" data-vehicle="rally_coupe">
+                <span class="vehicle-silhouette" aria-hidden="true"><i></i></span>
+                <strong>Rally coupe</strong>
+                <small>LOW · AGGRESSIVE</small>
+              </label>
+              <input class="garage-radio" type="radio" name="vehicle-type" id="vehicle-motorbike" value="motorbike" />
+              <label for="vehicle-motorbike" data-vehicle="motorbike">
+                <span class="vehicle-silhouette" aria-hidden="true"><i></i></span>
+                <strong>Motorbike</strong>
+                <small>NARROW · EXPOSED</small>
+              </label>
+            </div>
+          </fieldset>
+          <fieldset class="garage-fieldset paint-fieldset">
+            <legend>Paint</legend>
+            <div class="paint-options">
+              <input class="garage-radio" type="radio" name="paint-color" id="paint-crimson" value="crimson" checked />
+              <label for="paint-crimson" title="Crimson"><span style="--swatch: #b30b18"></span><b>Crimson</b></label>
+              <input class="garage-radio" type="radio" name="paint-color" id="paint-electric-blue" value="electric_blue" />
+              <label for="paint-electric-blue" title="Electric blue"><span style="--swatch: #176bd1"></span><b>Electric blue</b></label>
+              <input class="garage-radio" type="radio" name="paint-color" id="paint-forest-green" value="forest_green" />
+              <label for="paint-forest-green" title="Forest green"><span style="--swatch: #1d6b42"></span><b>Forest green</b></label>
+              <input class="garage-radio" type="radio" name="paint-color" id="paint-sunset-orange" value="sunset_orange" />
+              <label for="paint-sunset-orange" title="Sunset orange"><span style="--swatch: #e56622"></span><b>Sunset orange</b></label>
+              <input class="garage-radio" type="radio" name="paint-color" id="paint-pearl-white" value="pearl_white" />
+              <label for="paint-pearl-white" title="Pearl white"><span style="--swatch: #e8e5dc"></span><b>Pearl white</b></label>
+              <input class="garage-radio" type="radio" name="paint-color" id="paint-midnight-black" value="midnight_black" />
+              <label for="paint-midnight-black" title="Midnight black"><span style="--swatch: #11151b"></span><b>Midnight black</b></label>
+            </div>
+          </fieldset>
+        </section>
+        <section class="soundtrack-picker" aria-labelledby="soundtrack-title">
+          <div>
+            <p class="eyebrow">WNYR 87.9 LIBRARY</p>
+            <h2 id="soundtrack-title">Choose the night drive</h2>
+          </div>
+          <label for="radio-song">Song</label>
+          <select id="radio-song"></select>
+          <small id="radio-song-description">Procedural music generated locally in your browser.</small>
+        </section>
+        <section id="environment-picker" class="environment-picker" aria-labelledby="environment-title">
+          <div class="environment-heading">
+            <div>
+              <p class="eyebrow">CHOOSE THE HORIZON</p>
+              <h2 id="environment-title">Choose your environment</h2>
+            </div>
+            <output data-environment-status aria-live="polite">Catskill Scenic Byway</output>
+          </div>
+          <fieldset>
+            <legend>Environment</legend>
+            <div class="environment-options">
+              <input class="environment-radio" type="radio" name="environment-id" id="environment-catskills" value="catskills_scenic" checked />
+              <label for="environment-catskills" style="--environment-a: #b9a45f; --environment-b: #557249; --environment-c: #344c42;">
+                <span aria-hidden="true"></span>
+                <strong>Catskill Scenic Byway</strong>
+                <small>WARM FIELDS · MIXED FOREST</small>
+              </label>
+              <input class="environment-radio" type="radio" name="environment-id" id="environment-adirondacks" value="adirondack_autumn" />
+              <label for="environment-adirondacks" style="--environment-a: #b74a24; --environment-b: #db832f; --environment-c: #163a34;">
+                <span aria-hidden="true"></span>
+                <strong>Adirondack Autumn Lakes</strong>
+                <small>AUTUMN COLOR · GRANITE · LAKES</small>
+              </label>
+              <input class="environment-radio" type="radio" name="environment-id" id="environment-hokkaido" value="hokkaido_snow" />
+              <label for="environment-hokkaido" style="--environment-a: #eef6f8; --environment-b: #9fc7d4; --environment-c: #244958; --environment-sky: #cadce7;">
+                <span aria-hidden="true"></span>
+                <strong>Hokkaido Snow Pass</strong>
+                <small>SNOW · SPRUCE · FROZEN WATER</small>
+              </label>
+              <input class="environment-radio" type="radio" name="environment-id" id="environment-arizona" value="arizona_desert" />
+              <label for="environment-arizona" style="--environment-a: #db8a43; --environment-b: #a94628; --environment-c: #692d27; --environment-sky: #e7b36c;">
+                <span aria-hidden="true"></span>
+                <strong>Arizona Desert Canyons</strong>
+                <small>RED MESAS · SAGUARO · DUST</small>
+              </label>
+            </div>
+          </fieldset>
+          <small data-environment-description>Late-summer mixed forest, warm rural fields and layered blue-green ridges.</small>
+        </section>
+        <button id="start" type="button">Start the drive</button>
+        <div class="menu-controls" aria-label="Game controls">
+          <span><kbd>A D</kbd><small>STEER</small></span>
+          <span><kbd>Shift</kbd><small>BOOST</small></span>
+          <span><kbd>Space</kbd><small>HANDBRAKE</small></span>
+          <span><kbd>C</kbd><small>CAMERA</small></span>
+          <span><kbd>Esc</kbd><small>MENU</small></span>
+        </div>
+        <p class="menu-note">Music and the old road DJ begin when you drive.</p>
+      </section>
+      <section id="hud" hidden aria-label="Driving information">
+        <div class="location">
+          <span id="sky-phase" class="eyebrow">LATE AFTERNOON</span>
+          <strong id="location-name">CATSKILL SCENIC BYWAY</strong>
+          <div class="run-stats">
+            <span id="distance">0 m</span>
+            <span id="best-distance">BEST 0 m</span>
+            <span id="near-miss">0 NEAR MISSES</span>
+            <span id="camera-mode" aria-live="polite">CHASE</span>
+          </div>
+        </div>
+        <div class="speed-stack">
+          <output id="speed" aria-label="Current speed">0 <span>MPH</span></output>
+          <output id="score" aria-label="Score">0</output>
+          <div id="boost-readout">
+            <div><strong>BOOST</strong><span id="boost-percent">100%</span></div>
+            <div class="boost-track" aria-hidden="true"><i id="boost-fill"></i></div>
+          </div>
+          <div id="drift-readout" aria-live="polite">
+            <div><strong id="drift-label">GRIP</strong><span id="drift-angle">0°</span></div>
+            <div class="drift-track" aria-hidden="true"><i id="drift-fill"></i></div>
+            <output id="drift-score" aria-label="Drift score">0 × 1.0</output>
+          </div>
+        </div>
+        <div id="renderer-badge" aria-label="Renderer"></div>
+      </section>
+      <section id="radio" hidden aria-label="Night road radio">
+        <span class="radio-led" aria-hidden="true"></span>
+        <div>
+          <strong>WNYR 87.9</strong>
+          <span id="radio-status">Music and DJ ready</span>
+        </div>
+        <button id="radio-toggle" type="button" aria-pressed="false">Play radio</button>
+      </section>
+      <section id="controls" hidden aria-label="Controls">
+        <span><kbd>A D</kbd> dodge traffic</span>
+        <span><kbd>Shift</kbd> boost</span>
+        <span><kbd>Space</kbd> handbrake</span>
+        <span><kbd>M</kbd> radio</span>
+        <span><kbd>C</kbd> camera</span>
+        <span><kbd>Esc</kbd> menu</span>
+      </section>
+      <section id="crash" hidden role="dialog" aria-modal="true" aria-labelledby="crash-title">
+        <p class="eyebrow">THE ROAD REMEMBERS</p>
+        <h2 id="crash-title">That one found you.</h2>
+        <div class="crash-stats">
+          <span><small>SCORE</small><strong id="crash-score">0</strong></span>
+          <span><small>DISTANCE</small><strong id="crash-distance">0 m</strong></span>
+        </div>
+        <button id="restart" type="button">Take the road again</button>
+      </section>
+      <section id="touch-controls" aria-label="Touch driving controls">
+        <div class="touch-steering" aria-label="Steering">
+          <button type="button" data-touch-control="left" aria-label="Steer left"><span aria-hidden="true">&#9664;</span></button>
+          <button type="button" data-touch-control="right" aria-label="Steer right"><span aria-hidden="true">&#9654;</span></button>
+        </div>
+        <div class="touch-actions" aria-label="Driving actions">
+          <button type="button" data-touch-control="brake">Brake</button>
+          <button type="button" data-touch-control="boost">Boost</button>
+          <button type="button" data-touch-control="camera" aria-label="Change camera">Cam</button>
+          <button type="button" data-touch-control="radio">Radio</button>
+          <button type="button" data-touch-control="menu">Menu</button>
+        </div>
+      </section>
+      <div id="error" hidden role="alert"></div>
+    </main>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
