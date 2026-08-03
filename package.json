@@ -7,13 +7,14 @@
     "dev": "vite --host 127.0.0.1",
     "build": "vite build",
     "preview": "vite preview --host 127.0.0.1",
+    "assets:optimize": "node scripts/optimize-assets.mjs",
     "smoke:deployment": "node scripts/smoke-deployment.mjs"
   },
   "dependencies": {
     "three": "0.185.1"
   },
   "devDependencies": {
+    "sharp": "^0.35.3",
     "vite": "8.1.4"
   }
 }
-

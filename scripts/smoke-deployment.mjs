@@ -14,10 +14,35 @@ assert.match(html, /\/zen-driving\/assets\/index-[^"']+\.js/);
 assert.match(html, /\/zen-driving\/assets\/index-[^"']+\.css/);
 assert.doesNotMatch(html, /(?:src|href)=["']\/(?:src|assets)\//, 'root-absolute runtime URLs break project Pages');
 
-const files = fs.readdirSync(path.join(dist, 'assets'));
+const distAssets = path.join(dist, 'assets');
+const files = fs.readdirSync(distAssets);
 assert.equal(files.some((file) => file.startsWith('zen-driving-logo-v1-')), true, 'logo must be bundled');
 assert.equal(files.some((file) => file.endsWith('.js')), true, 'game bundle must be present');
 assert.equal(files.some((file) => file.endsWith('.css')), true, 'style bundle must be present');
 
-console.log(`Deployment smoke passed: repository-relative HTML and ${files.length} bundled assets.`);
+// Bark and foliage are awaited during scene build, so an oversized texture
+// delays the first playable frame rather than merely costing bandwidth.
+// Keep every shipped image in the budget WebP already comfortably meets.
+const IMAGE_BUDGET_BYTES = 768 * 1024;
+const TOTAL_IMAGE_BUDGET_BYTES = 4 * 1024 * 1024;
+const imagePattern = /\.(png|jpe?g|webp|avif|gif)$/i;
+
+let imageBytes = 0;
+for (const file of files.filter((name) => imagePattern.test(name))) {
+  const bytes = fs.statSync(path.join(distAssets, file)).size;
+  imageBytes += bytes;
+  assert.ok(
+    bytes <= IMAGE_BUDGET_BYTES,
+    `${file} is ${(bytes / 1024).toFixed(0)} KB, over the ${IMAGE_BUDGET_BYTES / 1024} KB per-image budget; run npm run assets:optimize`,
+  );
+}
+assert.ok(
+  imageBytes <= TOTAL_IMAGE_BUDGET_BYTES,
+  `bundled images total ${(imageBytes / 1048576).toFixed(2)} MB, over the ${TOTAL_IMAGE_BUDGET_BYTES / 1048576} MB budget`,
+);
+
+console.log(
+  `Deployment smoke passed: repository-relative HTML, ${files.length} bundled assets, `
+  + `${(imageBytes / 1048576).toFixed(2)} MB of images.`,
+);
 

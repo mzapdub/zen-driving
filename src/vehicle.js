@@ -5,8 +5,8 @@ const WHEELBASE = 2.81;
 const FRONT_AXLE = 1.42;
 const REAR_AXLE = WHEELBASE - FRONT_AXLE;
 const SPAWN_Z = 285;
-const PAINT_TEXTURE_URL = new URL('../assets/vehicle-paint-ai.png', import.meta.url).href;
-const TRIM_TEXTURE_URL = new URL('../assets/vehicle-trim-ai.png', import.meta.url).href;
+const PAINT_TEXTURE_URL = new URL('../assets/vehicle-paint-ai.webp', import.meta.url).href;
+const TRIM_TEXTURE_URL = new URL('../assets/vehicle-trim-ai.webp', import.meta.url).href;
 
 export const VEHICLE_TYPES = Object.freeze({
   sports_wagon: { label: 'Sports wagon', description: 'Stable and fast' },

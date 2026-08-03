@@ -313,8 +313,8 @@ export async function buildDetailedTrees(scene, route) {
 
   const loader = new THREE.TextureLoader();
   const [barkTexture, foliageTexture] = await Promise.all([
-    loader.loadAsync(new URL('../assets/tree-bark-ai.png', import.meta.url).href),
-    loader.loadAsync(new URL('../assets/foliage-atlas-ai.png', import.meta.url).href),
+    loader.loadAsync(new URL('../assets/tree-bark-ai.webp', import.meta.url).href),
+    loader.loadAsync(new URL('../assets/foliage-atlas-ai.webp', import.meta.url).href),
   ]);
   configureTextures(barkTexture, foliageTexture);
 

@@ -23,8 +23,8 @@ const COLLISION_HALF_LENGTH = 3.55;
 const COLLISION_HALF_WIDTH = 1.55;
 const NEAR_MISS_WIDTH = 2.85;
 const MAX_WAVE_HISTORY = 64;
-const PAINT_TEXTURE_URL = new URL('../assets/vehicle-paint-ai.png', import.meta.url).href;
-const TRIM_TEXTURE_URL = new URL('../assets/vehicle-trim-ai.png', import.meta.url).href;
+const PAINT_TEXTURE_URL = new URL('../assets/vehicle-paint-ai.webp', import.meta.url).href;
+const TRIM_TEXTURE_URL = new URL('../assets/vehicle-trim-ai.webp', import.meta.url).href;
 
 export const TRAFFIC_VEHICLE_FAMILIES = Object.freeze([
   Object.freeze({ id: 'sedan', label: 'Touring sedan', length: 4.55, width: 1.82, roofHeight: 1.38, cabinLength: 0.45, cabinZ: 0.05, wheelScale: 1 }),
