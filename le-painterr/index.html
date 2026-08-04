@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#1b2430" />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect x='9' y='10' width='46' height='16' rx='6' fill='%23f2b234'/%3E%3Crect x='29' y='26' width='6' height='12' fill='%23e2e4e9'/%3E%3Crect x='26' y='36' width='12' height='22' rx='6' fill='%23e2e4e9'/%3E%3C/svg%3E"
+    />
+    <meta
+      name="description"
+      content="Le Painterr — a 3D browser game about painting a house. Roll, spray and cover every wall before the light goes."
+    />
+    <title>Le Painterr — Paint the House</title>
+  </head>
+  <body>
+    <main id="app" aria-label="Le Painterr house painting game">
+      <canvas id="scene" aria-label="3D house to paint"></canvas>
+
+      <section id="loading" aria-live="polite">
+        <div class="brand-lockup">
+          <img class="brand-mark" id="brand-mark-loading" alt="" aria-hidden="true" />
+          <h1 class="brand-name">Le Painterr</h1>
+        </div>
+        <p id="loading-status">Mixing the paint…</p>
+      </section>
+
+      <section id="main-menu" hidden role="dialog" aria-modal="true" aria-labelledby="menu-title">
+        <div class="brand-lockup">
+          <img class="brand-mark" id="brand-mark-menu" alt="" aria-hidden="true" />
+          <h1 id="menu-title" class="brand-name">Le Painterr</h1>
+        </div>
+        <p class="menu-copy">
+          One house. Four bare walls and two gables. Pick a colour, drag the roller across the siding and
+          leave nothing primer-grey.
+        </p>
+        <button id="start" type="button" class="primary">Start painting</button>
+        <dl class="controls-list">
+          <div><dt>Paint</dt><dd>Hold left mouse / drag on touch</dd></div>
+          <div><dt>Orbit</dt><dd>Right mouse drag, or arrow keys / A · D</dd></div>
+          <div><dt>Height</dt><dd>W · S</dd></div>
+          <div><dt>Zoom</dt><dd>Mouse wheel, or Q · E</dd></div>
+          <div><dt>Colour</dt><dd>Number keys 1 – 6, or click a swatch</dd></div>
+        </dl>
+      </section>
+
+      <section id="hud" hidden aria-label="Painting progress">
+        <div class="hud-row hud-top">
+          <div class="readout">
+            <span class="readout-label">Coverage</span>
+            <output id="coverage" aria-live="polite">0%</output>
+            <div class="coverage-track" role="presentation"><div id="coverage-fill"></div></div>
+          </div>
+          <div class="readout readout-right">
+            <span class="readout-label">On the job</span>
+            <output id="timer">0:00</output>
+            <span class="renderer-badge" id="renderer-badge">WebGL</span>
+          </div>
+        </div>
+        <div class="hud-row hud-bottom">
+          <div id="palette" class="palette" role="radiogroup" aria-label="Paint colour"></div>
+          <p class="hint">Hold <kbd>left mouse</kbd> to paint · <kbd>right mouse</kbd> to orbit</p>
+        </div>
+      </section>
+
+      <section id="finished" hidden role="dialog" aria-modal="true" aria-labelledby="finished-title">
+        <h2 id="finished-title">Job done</h2>
+        <p class="finished-copy">
+          <span id="finished-coverage">100%</span> covered in <span id="finished-time">0:00</span>.
+        </p>
+        <button id="restart" type="button" class="primary">Strip it back and repaint</button>
+      </section>
+    </main>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

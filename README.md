@@ -23,4 +23,13 @@ npm run build
 npm run smoke:deployment
 ```
 
+## Le Painterr
+
+[`le-painterr/`](le-painterr/) holds a second, self-contained Three.js game — a 3D house-painting game
+with its own lockfile, WebP-only asset pipeline and budgeted deployment smoke test. It builds and
+verifies on every push through `.github/workflows/le-painterr-pages.yml`, but publishing it to Pages is a
+deliberate manual run: this repository serves one Pages site and Zen Driving owns it.
+
+## Notes
+
 The deployment is static. Shared leaderboard writes require a separate hosted datastore/API with authentication, validation, rate limiting, and abuse controls.

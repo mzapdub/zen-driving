@@ -1,0 +1,105 @@
+{
+  "note": "Single source of truth for every shipped texture. Sources are regenerated procedurally into assets/source (git-ignored, lossless PNG) and encoded to WebP by scripts/optimize-assets.mjs. Nothing but .webp is ever committed to assets/ or shipped in dist/.",
+  "budgets": {
+    "perImageBytes": 131072,
+    "totalImageBytes": 393216
+  },
+  "roles": {
+    "color": "sRGB albedo, opaque. Lossy WebP is fine.",
+    "data": "Linear non-color data (roughness, masks). Opaque, encoded near-lossless so banding does not leak into lighting.",
+    "cutout": "Has a real alpha channel and is sampled with alphaTest. alphaQuality MUST be 100 \u2014 lossy alpha shows up as edge fringing on every cutout silhouette."
+  },
+  "textures": [
+    {
+      "id": "house-siding",
+      "file": "house-siding.webp",
+      "source": "source/house-siding.png",
+      "role": "color",
+      "size": 1024,
+      "maxBytes": 65536,
+      "encode": {
+        "quality": 82,
+        "effort": 6,
+        "smartSubsample": true
+      }
+    },
+    {
+      "id": "house-siding-roughness",
+      "file": "house-siding-roughness.webp",
+      "source": "source/house-siding-roughness.png",
+      "role": "data",
+      "size": 1024,
+      "maxBytes": 81920,
+      "encode": {
+        "quality": 92,
+        "effort": 6,
+        "smartSubsample": false
+      }
+    },
+    {
+      "id": "roof-shingles",
+      "file": "roof-shingles.webp",
+      "source": "source/roof-shingles.png",
+      "role": "color",
+      "size": 1024,
+      "maxBytes": 65536,
+      "encode": {
+        "quality": 80,
+        "effort": 6,
+        "smartSubsample": true
+      }
+    },
+    {
+      "id": "ground-grass",
+      "file": "ground-grass.webp",
+      "source": "source/ground-grass.png",
+      "role": "color",
+      "size": 1024,
+      "maxBytes": 98304,
+      "encode": {
+        "quality": 78,
+        "effort": 6,
+        "smartSubsample": true
+      }
+    },
+    {
+      "id": "hedge-leaves",
+      "file": "hedge-leaves.webp",
+      "source": "source/hedge-leaves.png",
+      "role": "cutout",
+      "size": 512,
+      "maxBytes": 90112,
+      "encode": {
+        "quality": 88,
+        "alphaQuality": 100,
+        "effort": 6
+      }
+    },
+    {
+      "id": "brush-stamp",
+      "file": "brush-stamp.webp",
+      "source": "source/brush-stamp.png",
+      "role": "cutout",
+      "size": 256,
+      "maxBytes": 32768,
+      "encode": {
+        "quality": 90,
+        "alphaQuality": 100,
+        "effort": 6
+      }
+    },
+    {
+      "id": "le-painterr-mark",
+      "file": "le-painterr-mark.webp",
+      "source": "source/le-painterr-mark.png",
+      "role": "cutout",
+      "size": 512,
+      "maxBytes": 24576,
+      "encode": {
+        "quality": 92,
+        "alphaQuality": 100,
+        "effort": 6
+      }
+    }
+  ]
+}

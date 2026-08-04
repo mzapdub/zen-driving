@@ -1,0 +1,22 @@
+{
+  "name": "le-painterr",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "assets:source": "node scripts/generate-source-textures.mjs",
+    "assets:optimize": "node scripts/generate-source-textures.mjs && node scripts/optimize-assets.mjs",
+    "assets:verify": "node scripts/optimize-assets.mjs --verify",
+    "smoke:deployment": "node scripts/smoke-deployment.mjs"
+  },
+  "dependencies": {
+    "three": "0.185.1"
+  },
+  "devDependencies": {
+    "sharp": "0.35.3",
+    "vite": "8.1.4"
+  }
+}

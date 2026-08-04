@@ -1,0 +1,80 @@
+name: Le Painterr build and deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'le-painterr/**'
+      - '.github/workflows/le-painterr-pages.yml'
+  pull_request:
+    paths:
+      - 'le-painterr/**'
+      - '.github/workflows/le-painterr-pages.yml'
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: >-
+          Publish Le Painterr to this repository's GitHub Pages site. This
+          REPLACES the Zen Driving deployment — type "yes" only if that is what
+          you want.
+        required: true
+        default: 'no'
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: le-painterr
+
+jobs:
+  build:
+    name: Build and verify
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: le-painterr/package-lock.json
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Verify texture encoding and per-image budgets
+        run: npm run assets:verify
+      - name: Build repository-relative site
+        run: npm run build
+      - name: Verify deployment artifact
+        run: npm run smoke:deployment
+      - name: Upload Pages artifact
+        if: github.event_name == 'workflow_dispatch' && inputs.publish == 'yes'
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: le-painterr/dist
+
+  # Pages serves one site per repository and Zen Driving already owns it, so
+  # publishing Le Painterr is an explicit, opt-in manual run rather than
+  # something a push to main can trigger by accident.
+  deploy:
+    name: Deploy to GitHub Pages
+    if: github.event_name == 'workflow_dispatch' && inputs.publish == 'yes'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Configure Pages
+        uses: actions/configure-pages@v6
+      - name: Deploy Pages artifact
+        id: deployment
+        uses: actions/deploy-pages@v5
