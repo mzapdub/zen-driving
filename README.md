@@ -6,7 +6,7 @@ Play the public build at **https://mzapdub.github.io/zen-driving/**.
 
 ## Extra: Three AI Futures
 
-`public/ai-futures.html` is a self-contained 30-second canvas film about three possible outcomes of the AI revolution (2030–2040): The Garden, The Mirror and The Fracture, narrated by an AI. It deploys alongside the game at **https://mzapdub.github.io/zen-driving/ai-futures.html**. Append `?t=12` to open a paused still at any moment.
+`public/ai-futures.html` is a self-contained, illustrated canvas story (about 2 minutes) of three possible AI futures for 2030–2040 (Partners, Autopilot and Runaway), told by Claude, who appears as a character in each. It deploys alongside the game at **https://mzapdub.github.io/zen-driving/ai-futures.html**. Append `?t=40` to open a paused still at any moment.
 
 ## Deployment
 
