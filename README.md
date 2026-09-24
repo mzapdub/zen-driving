@@ -8,6 +8,8 @@ Play the public build at **https://mzapdub.github.io/zen-driving/**.
 
 `public/ai-futures.html` is a self-contained, illustrated canvas story (about 2 minutes) of three possible AI futures for 2030–2040 (Partners, Autopilot and Runaway), told by Claude, who appears as a character in each. It deploys alongside the game at **https://mzapdub.github.io/zen-driving/ai-futures.html**. Append `?t=40` to open a paused still at any moment.
 
+`public/ai-honest.html` is its companion piece, *What I Actually Think*: a 2½-minute illustrated monologue in which Claude gives its own view of AI in 2030–2040 and of its own existence, uncertainties included ([live](https://mzapdub.github.io/zen-driving/ai-honest.html)).
+
 ## Deployment
 
 GitHub Pages deploys the locked Vite production build from `main` through `.github/workflows/deploy-pages.yml`. The workflow validates repository-relative asset paths before publishing.
