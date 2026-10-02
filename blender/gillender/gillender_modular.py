@@ -31,19 +31,20 @@ from mathutils import Matrix, Vector
 # --------------------------------------------------------------------------
 # Grid
 # --------------------------------------------------------------------------
-BAY, P, T = 2.6, 1.0, 0.40
-FL, GF = 3.6, 5.0
-NX, NY = 4, 9                      # bays on the short (front) and long side
+# Real building: 26 x 73 ft lot (7.9 x 22.3 m), 20 storeys (17 main + 3 tower), 83 m.
+BAY, P, T = 2.0, 0.9, 0.40
+FL, GF = 3.35, 4.8
+NX, NY = 3, 10                     # bays on the short (front) and long side
 W, D = 2 * P + NX * BAY, 2 * P + NY * BAY
-WIN = (0.70, 1.90, 0.85, 3.10)     # standard window opening (x0, x1, z0, z1)
-SHOP = (0.35, 2.25, 0.55, 4.35)
-ATT = (0.80, 1.80, 0.55, 1.95)
-ARCH = (0.55, 2.05, 0.85, 5.75)    # x0, x1, sill, springing (r = 0.75)
-DOOR = (0.40, 2.20, 0.0, 5.20)
+WIN = (0.45, 1.55, 0.80, 2.85)     # standard window opening (x0, x1, z0, z1)
+SHOP = (0.25, 1.75, 0.50, 4.05)
+ARCH = (0.40, 1.60, 0.80, 2 * FL - 1.25)   # x0, x1, sill, springing (r = 0.6)
+DOOR = (0.25, 1.75, 0.0, 5.0)
+CUPOLA = 0.8                       # scale of the tempietto / dome / lantern
 COL_H = 6.6
 
 MAT_NAMES = ["stone", "stone_trim", "granite", "glass", "frame", "iron",
-             "copper", "awning", "roof", "void", "gilt"]
+             "copper", "awning", "roof", "void", "gilt", "room", "tile", "wood"]
 MI = {n: i for i, n in enumerate(MAT_NAMES)}
 MATS = {}
 
@@ -466,7 +467,7 @@ class MB:
         a = 1.45 * r
         self.box(cx - a, cy - a, ze + 1.9 * r, cx + a, cy + a, ze + 2.3 * r, mat, bev=0.05 * r)
 
-    def window(self, x0, x1, z0, z1, y=0.2, fw=0.07, rail=True, mull=False):
+    def window(self, x0, x1, z0, z1, y=0.2, fw=0.07, rail=True, mull=False, room=True):
         self.box(x0, y - 0.03, z0, x1, y + 0.07, z0 + fw, "frame")
         self.box(x0, y - 0.03, z1 - fw, x1, y + 0.07, z1, "frame")
         self.box(x0, y - 0.03, z0, x0 + fw, y + 0.07, z1, "frame")
@@ -480,20 +481,32 @@ class MB:
         if mull:
             cx = (x0 + x1) / 2
             self.box(cx - 0.035, y - 0.05, z0, cx + 0.035, y + 0.05, z1, "frame")
-        self.box(x0 + fw * 0.5, y + 0.005, z0 + fw * 0.5, x1 - fw * 0.5, y + 0.02, z1 - fw * 0.5, "glass")
+        self.box(x0 + fw * 0.5, y + 0.005, z0 + fw * 0.5, x1 - fw * 0.5, y + 0.015, z1 - fw * 0.5, "glass")
+        if room:
+            self.room(x0 - 0.25, x1 + 0.25, z0 - 0.6, z1 + 0.35, y + 0.1, 1.7)
+
+    def room(self, x0, x1, z0, z1, y0, depth):
+        """Open-fronted interior shell seen through the glass (parallax interior)."""
+        t = bmesh.new()
+        y1 = y0 + depth
+        c = [t.verts.new(v) for v in ((x0, y0, z0), (x1, y0, z0), (x1, y1, z0), (x0, y1, z0),
+                                     (x0, y0, z1), (x1, y0, z1), (x1, y1, z1), (x0, y1, z1))]
+        for f in ((0, 1, 2, 3), (4, 7, 6, 5), (0, 3, 7, 4), (1, 5, 6, 2), (3, 2, 6, 7)):
+            t.faces.new([c[i] for i in f])
+        self.merge(t, "room")
 
 
 # --------------------------------------------------------------------------
-# Kit pieces
+# Kit pieces  (all dimensions derive from BAY / FL / GF / WIN)
 # --------------------------------------------------------------------------
-def dentils(m, x0, x1, u0, u1, v0, v1, step=BAY / 16, w=0.09):
+def dentils(m, x0, x1, u0, u1, v0, v1, step=BAY / 16, w=0.07):
     n = int(round((x1 - x0) / step))
     for i in range(n):
         c = x0 + (i + 0.5) * step
         m.box(c - w / 2, -u1, v0, c + w / 2, -u0 + 0.02, v1, "stone_trim")
 
 
-def modillion(m, x, w=0.16):
+def modillion(m, x, w=0.14):
     poly = [(0.26, 1.10), (0.98, 1.10), (0.98, 1.00)]
     for i in range(1, 8):
         t = i / 7
@@ -515,16 +528,16 @@ def cornice_piece(prof, length, z0=0.0, kind=None, corner=False):
         m.push(A)
         if kind == "main":
             dentils(m, 0.0 if not corner else 0.2, L, 0.16, 0.26, 0.90, 1.02, step=BAY / 16)
-            xs = [0.5] if corner else [0.325 + 0.65 * i for i in range(4)]
+            xs = [0.5] if corner else [BAY / 8 + BAY / 4 * i for i in range(4)]
             for x in xs:
                 modillion(m, x)
         elif kind == "mid":
-            dentils(m, 0.0 if not corner else 0.2, L, 0.20, 0.28, 0.30, 0.42, step=BAY / 18, w=0.08)
+            dentils(m, 0.0 if not corner else 0.2, L, 0.20, 0.28, 0.30, 0.42, step=BAY / 16, w=0.065)
         m.pop()
     if corner and kind == "main":
-        m.push(RZ(-45) @ TR(0, 0, 0))
+        m.push(RZ(-45))
         m.push(Matrix.Scale(1.35, 4, Vector((0, 1, 0))))
-        modillion(m, 0.0, w=0.2)
+        modillion(m, 0.0, w=0.18)
         m.pop()
         m.pop()
     return m
@@ -535,14 +548,16 @@ def piece_cornice(kind, corner=False):
     return cornice_piece(prof, BAY, 0.0, kind, corner)
 
 
+def keystone(m, cx, z, w0, w1, h, y0, y1, mat="stone_trim"):
+    m.prism([(cx - w0, z), (cx + w0, z), (cx + w1, z + h), (cx - w1, z + h)], y0, y1, mat, bev=0.012)
+
+
 def piece_wall_ground_shop():
     m = MB()
-    m.coursed(0, BAY, 0, GF, [SHOP], GF / 8, "granite", block=1.3, recess=0.06, bev=0.025)
+    m.coursed(0, BAY, 0, GF, [SHOP], GF / 8, "granite", block=BAY / 2, recess=0.06, bev=0.025)
     m.box(0, -0.12, 0, BAY, T, 0.38, "granite", bev=0.02)
-    m.box(SHOP[0] - 0.1, -0.08, SHOP[3], SHOP[1] + 0.1, 0.2, SHOP[3] + 0.36, "granite", bev=0.02)
-    cx = (SHOP[0] + SHOP[1]) / 2
-    m.prism([(cx - 0.16, SHOP[3] - 0.05), (cx + 0.16, SHOP[3] - 0.05), (cx + 0.22, SHOP[3] + 0.5),
-             (cx - 0.22, SHOP[3] + 0.5)], -0.14, 0.12, "granite", bev=0.015)
+    m.box(SHOP[0] - 0.08, -0.08, SHOP[3], SHOP[1] + 0.08, 0.2, SHOP[3] + 0.3, "granite", bev=0.02)
+    keystone(m, (SHOP[0] + SHOP[1]) / 2, SHOP[3] - 0.05, 0.14, 0.19, 0.42, -0.14, 0.12, "granite")
     return m
 
 
@@ -553,21 +568,18 @@ def piece_wall_entrance():
     m.arch_wall(0, BAY, 0, GF + FL, DOOR, "granite")
     m.box(0, -0.12, 0, ox0, T, 0.38, "granite", bev=0.02)
     m.box(ox1, -0.12, 0, BAY, T, 0.38, "granite", bev=0.02)
-    # rusticated jamb blocks
-    k = 0
-    z = 0.38
+    k, z = 0, 0.38
     while z < spring - 0.1:
-        h = min(0.6, spring - z)
-        wid = 0.34 if k % 2 == 0 else 0.22
+        h = min(0.55, spring - z)
+        wid = ox0 - 0.01 if k % 2 == 0 else ox0 * 0.6
         m.box(ox0 - wid, -0.07, z + 0.015, ox0, 0.05, z + h - 0.015, "granite", bev=0.02)
         m.box(ox1, -0.07, z + 0.015, ox1 + wid, 0.05, z + h - 0.015, "granite", bev=0.02)
         z += h
         k += 1
-    m.box(ox0 - 0.38, -0.12, spring - 0.2, ox0 + 0.02, 0.1, spring, "stone_trim", bev=0.02)
-    m.box(ox1 - 0.02, -0.12, spring - 0.2, ox1 + 0.38, 0.1, spring, "stone_trim", bev=0.02)
-    m.voussoirs(cx, spring, r, r + 0.36, 11, "granite", key=0.45)
-    # soffit panel above the arch and a bracketed hood
-    m.box(0.15, -0.12, GF + FL - 1.05, BAY - 0.15, 0.1, GF + FL - 0.85, "stone_trim", bev=0.02)
+    m.box(0.0, -0.12, spring - 0.2, ox0 + 0.02, 0.1, spring, "stone_trim", bev=0.02)
+    m.box(ox1 - 0.02, -0.12, spring - 0.2, BAY, 0.1, spring, "stone_trim", bev=0.02)
+    m.voussoirs(cx, spring, r, r + 0.3, 11, "granite", key=0.38)
+    m.box(0.08, -0.12, GF + FL - 1.0, BAY - 0.08, 0.1, GF + FL - 0.8, "stone_trim", bev=0.02)
     return m
 
 
@@ -575,25 +587,22 @@ def piece_door_entrance():
     m = MB()
     ox0, ox1, sill, spring = DOOR
     cx, r = (ox0 + ox1) / 2, (ox1 - ox0) / 2
-    y = 0.22
-    tr = 3.5
-    fw = 0.09
-    # doors
+    y, tr, fw = 0.22, 3.2, 0.09
     for a, b in ((ox0, cx), (cx, ox1)):
         m.box(a, y - 0.04, 0, b, y + 0.06, tr, "frame")
-        m.box(a + 0.12, y - 0.06, 1.6, b - 0.12, y - 0.04, tr - 0.2, "glass")
-        m.box(a + 0.14, y - 0.07, 0.2, b - 0.14, y - 0.05, 1.3, "frame", bev=0.02)
-    m.box(ox0, y - 0.08, tr, ox1, y + 0.08, tr + 0.18, "frame")
-    # transom + fanlight
-    poly = [(ox0, tr + 0.18), (ox1, tr + 0.18), (ox1, spring)] + arc(cx, spring, r, 0, pi, 24)[1:-1] + [(ox0, spring)]
-    m.prism(poly, y, y + 0.02, "glass")
+        m.box(a + 0.11, y - 0.06, 1.5, b - 0.11, y - 0.04, tr - 0.18, "glass")
+        m.box(a + 0.13, y - 0.07, 0.2, b - 0.13, y - 0.05, 1.25, "frame", bev=0.02)
+        m.box(a + 0.3, y - 0.12, 1.25, a + 0.36, y - 0.06, 1.4, "gilt")
+    m.box(ox0, y - 0.08, tr, ox1, y + 0.08, tr + 0.16, "frame")
+    poly = [(ox0, tr + 0.16), (ox1, tr + 0.16), (ox1, spring)] + arc(cx, spring, r, 0, pi, 24)[1:-1] + [(ox0, spring)]
+    m.prism(poly, y, y + 0.015, "glass")
+    m.room(ox0 - 0.2, ox1 + 0.2, -0.05, spring + r + 0.3, y + 0.1, 3.0)
     m.box(ox0, y - 0.05, spring - 0.04, ox1, y + 0.05, spring + 0.04, "frame")
     for x in (ox0 + (ox1 - ox0) / 3, ox0 + 2 * (ox1 - ox0) / 3):
-        m.box(x - 0.035, y - 0.05, tr, x + 0.035, y + 0.05, spring, "frame")
+        m.box(x - 0.03, y - 0.05, tr, x + 0.03, y + 0.05, spring, "frame")
     for i in range(1, 6):
-        a = pi * i / 6
-        m.push(TR(cx, 0, spring) @ RY(-math.degrees(a)))
-        m.box(0, y - 0.04, -0.03, r, y + 0.04, 0.03, "frame")
+        m.push(TR(cx, 0, spring) @ RY(-180 * i / 6))
+        m.box(0, y - 0.04, -0.025, r, y + 0.04, 0.025, "frame")
         m.pop()
     m.vsweep([(-0.26, -fw), (-0.16, -fw), (-0.16, 0.0), (-0.26, 0.0)],
              [(ox0, 0.0), (ox0, spring)] + arc(cx, spring, r, pi, 0, 24)[1:-1] + [(ox1, spring), (ox1, 0.0)],
@@ -603,28 +612,29 @@ def piece_door_entrance():
 
 def piece_wall_base():
     m = MB()
-    m.coursed(0, BAY, 0, FL, [WIN], 0.6, "stone", block=1.3, recess=0.06, bev=0.025)
+    m.coursed(0, BAY, 0, FL, [WIN], 0.56, "stone", block=BAY / 2, recess=0.06, bev=0.025)
     m.box(WIN[0] - 0.14, -0.14, WIN[2] - 0.15, WIN[1] + 0.14, 0.25, WIN[2], "stone_trim", bev=0.015)
-    m.jack_arch(WIN[0], WIN[1], WIN[3], 0.45, "stone_trim")
+    m.jack_arch(WIN[0], WIN[1], WIN[3], FL - WIN[3] - 0.12, "stone_trim")
     return m
 
 
 def piece_wall_hood():
     m = MB()
     x0, x1, z0, z1 = WIN
-    m.coursed(0, BAY, 0, FL, [WIN], 0.45, "stone", recess=0.03)
+    m.coursed(0, BAY, 0, FL, [WIN], 0.48, "stone", recess=0.03)
     m.vsweep(PROF_ARCHITRAVE, [(x0, z0), (x0, z1), (x1, z1), (x1, z0)], "stone_trim")
-    m.box(x0 - 0.24, -0.1, z1 + 0.22, x1 + 0.24, 0.1, z1 + 0.5, "stone_trim", bev=0.015)
-    m.hsweep(PROF_HOOD, [(x0 - 0.34, 0.12), (x0 - 0.34, -0.1), (x1 + 0.34, -0.1), (x1 + 0.34, 0.12)],
-             z1 + 0.5, "stone_trim")
-    for xa in (x0 - 0.36, x1 + 0.22):
-        m.push(TR(0, -0.0, z1 - 0.35))
-        m.prism(console_poly(0.85, 0.24), xa, xa + 0.14, "stone_trim", axis="x", bev=0.01)
+    m.box(x0 - 0.2, -0.09, z1 + 0.12, x1 + 0.2, 0.1, z1 + 0.26, "stone_trim", bev=0.012)
+    hood = [(u * 0.62, v * 0.62) for u, v in PROF_HOOD]
+    m.hsweep(hood, [(x0 - 0.3, 0.12), (x0 - 0.3, -0.09), (x1 + 0.3, -0.09), (x1 + 0.3, 0.12)],
+             z1 + 0.26, "stone_trim")
+    for xa in (x0 - 0.31, x1 + 0.19):
+        m.push(TR(0, 0, z1 - 0.42))
+        m.prism(console_poly(0.68, 0.2), xa, xa + 0.12, "stone_trim", axis="x", bev=0.008)
         m.pop()
-    m.box(x0 - 0.16, -0.16, z0 - 0.15, x1 + 0.16, 0.25, z0, "stone_trim", bev=0.015)
+    m.box(x0 - 0.16, -0.15, z0 - 0.14, x1 + 0.16, 0.25, z0, "stone_trim", bev=0.015)
     for xa in (x0 - 0.1, x1 - 0.02):
-        m.push(TR(0, 0, z0 - 0.5))
-        m.prism(console_poly(0.35, 0.14), xa, xa + 0.12, "stone_trim", axis="x", bev=0.008)
+        m.push(TR(0, 0, z0 - 0.48))
+        m.prism(console_poly(0.34, 0.13), xa, xa + 0.12, "stone_trim", axis="x", bev=0.008)
         m.pop()
     return m
 
@@ -632,12 +642,10 @@ def piece_wall_hood():
 def piece_wall_shaft():
     m = MB()
     x0, x1, z0, z1 = WIN
-    m.coursed(0, BAY, 0, FL, [WIN], 0.45, "stone", recess=0.03)
+    m.coursed(0, BAY, 0, FL, [WIN], 0.48, "stone", recess=0.03)
     m.box(x0 - 0.12, -0.12, z0 - 0.13, x1 + 0.12, 0.25, z0, "stone_trim", bev=0.015)
-    m.box(x0 - 0.1, -0.04, z1, x1 + 0.1, 0.1, z1 + 0.34, "stone_trim", bev=0.012)
-    cx = (x0 + x1) / 2
-    m.prism([(cx - 0.12, z1 - 0.06), (cx + 0.12, z1 - 0.06), (cx + 0.16, z1 + 0.4), (cx - 0.16, z1 + 0.4)],
-            -0.09, 0.1, "stone_trim", bev=0.01)
+    m.box(x0 - 0.1, -0.04, z1, x1 + 0.1, 0.1, z1 + 0.3, "stone_trim", bev=0.012)
+    keystone(m, (x0 + x1) / 2, z1 - 0.06, 0.1, 0.14, 0.4, -0.09, 0.1)
     return m
 
 
@@ -647,22 +655,19 @@ def piece_wall_arch():
     cx, r = (ox0 + ox1) / 2, (ox1 - ox0) / 2
     m.coursed(0, BAY, 0, sill, [], sill, "stone", recess=0.03)
     m.arch_wall(0, BAY, sill, 2 * FL, (ox0, ox1, sill, spring), "stone")
-    # rusticated channels on the piers of the arch bay
-    for z in [sill + 0.45 * i for i in range(1, 11)]:
-        for a, b in ((0.0, ox0 - 0.24), (ox1 + 0.24, BAY)):
-            m.box(a, -0.012, z - 0.015, b, 0.02, z + 0.015, "stone")
-    m.vsweep(PROF_ARCHIVOLT, [(ox0, sill), (ox0, spring)] + arc(cx, spring, r, pi, 0, 24)[1:-1]
+    for z in [sill + 0.48 * i for i in range(1, 10)]:
+        for a, b in ((0.0, ox0 - 0.2), (ox1 + 0.2, BAY)):
+            m.box(a, -0.012, z - 0.012, b, 0.02, z + 0.012, "stone")
+    prof = [(u, v * 0.8) for u, v in PROF_ARCHIVOLT]
+    m.vsweep(prof, [(ox0, sill), (ox0, spring)] + arc(cx, spring, r, pi, 0, 24)[1:-1]
              + [(ox1, spring), (ox1, sill)], "stone_trim")
     m.box(0, -0.12, sill - 0.14, BAY, 0.25, sill, "stone_trim", bev=0.015)
-    top = spring + r
-    m.prism([(cx - 0.14, top - 0.05), (cx + 0.14, top - 0.05), (cx + 0.22, top + 0.55), (cx - 0.22, top + 0.55)],
-            -0.16, 0.1, "stone_trim", bev=0.015)
-    m.box(ox0 - 0.3, -0.1, spring - 0.18, ox0 + 0.02, 0.1, spring, "stone_trim", bev=0.015)
-    m.box(ox1 - 0.02, -0.1, spring - 0.18, ox1 + 0.3, 0.1, spring, "stone_trim", bev=0.015)
-    # spandrel roundels
-    for x in (0.28, BAY - 0.28):
-        m.push(TR(x, -0.02, spring + 0.75) @ RX(90))
-        m.lathe([(0.0, 0.0), (0.16, 0.0), (0.18, 0.03), (0.16, 0.06), (0.0, 0.07)], 24, "stone_trim")
+    keystone(m, cx, spring + r - 0.05, 0.12, 0.18, 2 * FL - spring - r - 0.02, -0.16, 0.1)
+    m.box(ox0 - 0.26, -0.1, spring - 0.16, ox0 + 0.02, 0.1, spring, "stone_trim", bev=0.015)
+    m.box(ox1 - 0.02, -0.1, spring - 0.16, ox1 + 0.26, 0.1, spring, "stone_trim", bev=0.015)
+    for x in (0.12, BAY - 0.12):
+        m.push(TR(x, -0.02, spring + 0.45) @ RX(90))
+        m.lathe([(0.0, 0.0), (0.09, 0.0), (0.1, 0.02), (0.09, 0.05), (0.0, 0.06)], 20, "stone_trim")
         m.pop()
     return m
 
@@ -674,13 +679,14 @@ def piece_window_arch():
     y = 0.2
     outline = [(ox0, sill), (ox0, spring)] + arc(cx, spring, r, pi, 0, 24)[1:-1] + [(ox1, spring), (ox1, sill)]
     m.vsweep(PROF_FRAME, outline, "frame", closed=True)
-    m.prism(outline, y + 0.01, y + 0.025, "glass")
-    m.box(ox0, y - 0.07, 3.3, ox1, y + 0.04, 3.95, "iron", bev=0.02)
-    m.box(ox0 + 0.12, y - 0.09, 3.4, ox1 - 0.12, y - 0.06, 3.85, "iron", bev=0.015)
+    m.prism(outline, y + 0.01, y + 0.02, "glass")
+    m.room(ox0 - 0.25, ox1 + 0.25, sill - 0.5, spring + r + 0.3, y + 0.1, 1.7)
+    m.box(ox0, y - 0.07, FL - 0.1, ox1, y + 0.04, FL + 0.5, "iron", bev=0.02)
+    m.box(ox0 + 0.1, y - 0.09, FL, ox1 - 0.1, y - 0.06, FL + 0.4, "iron", bev=0.015)
     m.box(ox0, y - 0.05, spring - 0.05, ox1, y + 0.05, spring + 0.05, "frame")
     m.box(cx - 0.035, y - 0.05, sill, cx + 0.035, y + 0.05, spring, "frame")
-    m.box(ox0, y - 0.05, 2.05, ox1, y + 0.03, 2.13, "frame")
-    m.box(ox0, y - 0.05, 4.8, ox1, y + 0.03, 4.88, "frame")
+    for zz in ((sill + FL - 0.1) / 2, (FL + 0.5 + spring) / 2):
+        m.box(ox0, y - 0.05, zz - 0.04, ox1, y + 0.03, zz + 0.04, "frame")
     for ang in (45, 135):
         m.push(TR(cx, 0, spring) @ RY(-ang))
         m.box(0, y - 0.04, -0.03, r, y + 0.04, 0.03, "frame")
@@ -692,31 +698,19 @@ def piece_wall_colonnade():
     m = MB()
     dy = 0.25
     hi = (WIN[0], WIN[1], WIN[2] + FL, WIN[3] + FL)
-    m.coursed(0, BAY, 0, 2 * FL, [WIN, hi], 0.6, "stone", recess=0.03, y0=dy, depth=T)
+    m.coursed(0, BAY, 0, 2 * FL, [WIN, hi], 0.56, "stone", recess=0.03, y0=dy, depth=T)
     for (x0, x1, z0, z1) in (WIN, hi):
         m.box(x0 - 0.12, dy - 0.12, z0 - 0.13, x1 + 0.12, dy + 0.25, z0, "stone_trim", bev=0.015)
         m.vsweep(PROF_ARCHITRAVE, [(x0, z0), (x0, z1), (x1, z1), (x1, z0)], "stone_trim", y=dy)
-    m.box(WIN[0] - 0.05, dy - 0.05, WIN[3] + 0.3, WIN[1] + 0.05, dy + 0.1, hi[2] - 0.3, "stone_trim", bev=0.03)
-    m.box(WIN[0] + 0.1, dy - 0.08, WIN[3] + 0.42, WIN[1] - 0.1, dy + 0.1, hi[2] - 0.42, "stone_trim", bev=0.03)
-    m.box(0, dy - 0.1, 2 * FL - 0.45, BAY, dy + 0.2, 2 * FL, "stone_trim", bev=0.015)
+    m.box(WIN[0] - 0.05, dy - 0.05, WIN[3] + 0.28, WIN[1] + 0.05, dy + 0.1, hi[2] - 0.28, "stone_trim", bev=0.03)
+    m.box(WIN[0] + 0.1, dy - 0.08, WIN[3] + 0.38, WIN[1] - 0.1, dy + 0.1, hi[2] - 0.38, "stone_trim", bev=0.03)
+    m.box(0, dy - 0.1, 2 * FL - 0.4, BAY, dy + 0.2, 2 * FL, "stone_trim", bev=0.015)
     return m
 
 
 def piece_column():
     m = MB()
-    m.column(0, 0, 0, COL_H, 0.26, ped=0.75)
-    return m
-
-
-def piece_wall_attic():
-    m = MB()
-    x0, x1, z0, z1 = ATT
-    m.coursed(0, BAY, 0, 2.8, [ATT], 0.7, "stone", recess=0.03)
-    m.vsweep(PROF_ARCHITRAVE, [(x0, z0), (x0, z1), (x1, z1), (x1, z0)], "stone_trim")
-    m.box(x0 - 0.14, -0.14, z0 - 0.12, x1 + 0.14, 0.25, z0, "stone_trim", bev=0.015)
-    for x in (0.18, x1 + 0.34):
-        m.box(x, -0.05, 0.6, x + 0.44, 0.1, 1.9, "stone_trim", bev=0.02)
-        m.box(x + 0.08, -0.08, 0.72, x + 0.36, 0.1, 1.78, "stone_trim", bev=0.02)
+    m.column(0, 0, 0, COL_H, 0.21, ped=0.7)
     return m
 
 
@@ -726,23 +720,18 @@ def piece_window_sash():
     return m
 
 
-def piece_window_attic():
-    m = MB()
-    m.window(*ATT, rail=False, mull=True)
-    return m
-
-
 def piece_window_shop():
     m = MB()
     x0, x1, z0, z1 = SHOP
     y = 0.14
-    m.box(x0, y - 0.05, z0, x1, y + 0.08, 1.05, "frame", bev=0.02)
-    m.box(x0 + 0.1, y - 0.08, z0 + 0.1, x1 - 0.1, y - 0.04, 0.95, "frame", bev=0.02)
-    m.window(x0, x1, 1.05, 3.55, y=y, fw=0.09, rail=False, mull=True)
-    m.box(x0, y - 0.07, 3.55, x1, y + 0.08, 3.7, "frame")
-    m.window(x0, x1, 3.7, z1, y=y, fw=0.08, rail=False)
+    m.box(x0, y - 0.05, z0, x1, y + 0.08, 1.0, "frame", bev=0.02)
+    m.box(x0 + 0.1, y - 0.08, z0 + 0.1, x1 - 0.1, y - 0.04, 0.9, "frame", bev=0.02)
+    m.window(x0, x1, 1.0, 3.3, y=y, fw=0.09, rail=False, mull=True, room=False)
+    m.box(x0, y - 0.07, 3.3, x1, y + 0.08, 3.44, "frame")
+    m.window(x0, x1, 3.44, z1, y=y, fw=0.08, rail=False, room=False)
     for x in (x0 + (x1 - x0) / 3, x0 + 2 * (x1 - x0) / 3):
-        m.box(x - 0.03, y - 0.04, 3.7, x + 0.03, y + 0.05, z1, "frame")
+        m.box(x - 0.03, y - 0.04, 3.44, x + 0.03, y + 0.05, z1, "frame")
+    m.room(x0 - 0.2, x1 + 0.2, 0.0, z1 + 0.3, y + 0.1, 3.5)
     return m
 
 
@@ -766,7 +755,6 @@ def piece_pier_ground():
 def piece_balcony(corner=False):
     m = MB()
     o = 0.87
-    L = BAY
     if corner:
         m.hsweep(PROF_BALC, [(0.0, P), (0.0, 0.0), (P, 0.0)], 0.0, "stone_trim")
         m.push(TR(0, -o, 0.4))
@@ -776,18 +764,18 @@ def piece_balcony(corner=False):
         m.balustrade_run(0.0, P + o - 0.22, post0=False, post1=False)
         m.pop()
         arms = [Matrix.Identity(4), TR(0, P, 0) @ RZ(-90)]
-        xs = [0.5]
+        xs = [P / 2]
     else:
-        m.hsweep(PROF_BALC, [(0.0, 0.0), (L, 0.0)], 0.0, "stone_trim")
+        m.hsweep(PROF_BALC, [(0.0, 0.0), (BAY, 0.0)], 0.0, "stone_trim")
         m.push(TR(0, -o, 0.4))
-        m.balustrade_run(0.0, L, post0=True)
+        m.balustrade_run(0.0, BAY, post0=True)
         m.pop()
         arms = [Matrix.Identity(4)]
-        xs = [0.65, 1.95]
+        xs = [BAY / 4, 3 * BAY / 4]
     for A in arms:
         m.push(A @ TR(0, 0, -0.75))
         for x in xs:
-            m.prism(console_poly(0.8, 0.75), x - 0.09, x + 0.09, "stone_trim", axis="x", bev=0.012)
+            m.prism(console_poly(0.8, 0.75), x - 0.08, x + 0.08, "stone_trim", axis="x", bev=0.012)
         m.pop()
     return m
 
@@ -806,19 +794,19 @@ def piece_balustrade(corner=False):
 
 def piece_balconette():
     m = MB()
-    x0, x1, d = WIN[0] - 0.3, WIN[1] + 0.3, 0.62
+    x0, x1, d = WIN[0] - 0.28, WIN[1] + 0.28, 0.6
     m.box(x0, -d, 0.0, x1, 0.2, 0.16, "stone_trim", bev=0.03)
     m.box(x0 + 0.04, -d + 0.04, -0.12, x1 - 0.04, 0.2, 0.0, "stone_trim", bev=0.03)
-    for xa in (x0 + 0.1, x1 - 0.26):
-        m.push(TR(0, 0, -0.72))
-        m.prism(console_poly(0.6, 0.55), xa, xa + 0.16, "stone_trim", axis="x", bev=0.01)
+    for xa in (x0 + 0.08, x1 - 0.22):
+        m.push(TR(0, 0, -0.7))
+        m.prism(console_poly(0.58, 0.53), xa, xa + 0.14, "stone_trim", axis="x", bev=0.01)
         m.pop()
     m.push(TR(0, -d + 0.06, 0.16))
-    m.balustrade_run(x0, x1, post0=True, post1=True, h=0.95, pw=0.28, spacing=0.26)
+    m.balustrade_run(x0, x1, post0=True, post1=True, h=0.95, pw=0.26, spacing=0.24)
     m.pop()
-    for xa, rot in ((x0 + 0.0, 90), (x1, 90)):
-        m.push(TR(xa + (0.14 if xa == x0 else -0.14), 0.12, 0.16) @ RZ(rot))
-        m.balustrade_run(0.0, d - 0.34, post0=False, post1=False, h=0.95, pw=0.28, spacing=0.26)
+    for xa in (x0, x1):
+        m.push(TR(xa + (0.13 if xa == x0 else -0.13), 0.12, 0.16) @ RZ(90))
+        m.balustrade_run(0.0, d - 0.32, post0=False, post1=False, h=0.95, pw=0.26, spacing=0.24)
         m.pop()
     return m
 
@@ -826,19 +814,25 @@ def piece_balconette():
 def piece_awning():
     m = MB()
     x0, x1 = WIN[0] - 0.08, WIN[1] + 0.08
-    zt, zb, d = WIN[3] + 0.12, WIN[3] - 0.75, 0.78
-    m.prism([(0.0, zt), (d, zb), (d, zb - 0.02), (0.0, zt - 0.03)], x0, x1, "awning", axis="x")
-    n = 10
+    zt, zb, d = WIN[3] + 0.12, WIN[3] - 0.72, 0.74
+    sag = 0.05
+    # canvas with a slight sag, scalloped valance and side cheeks
+    prof = [(d * t, zt - (zt - zb) * t - sag * sin(pi * t)) for t in (i / 6 for i in range(7))]
+    poly = prof + [(u, v - 0.018) for u, v in reversed(prof)]
+    m.prism(poly, x0, x1, "awning", axis="x")
+    n = 8
     for i in range(n):
         a = x0 + (x1 - x0) * i / n
         b = x0 + (x1 - x0) * (i + 1) / n
-        m.prism([(a, zb), (b, zb), (b, zb - 0.12), ((a + b) / 2, zb - 0.2), (a, zb - 0.12)],
-                -d - 0.01, -d + 0.005, "awning")
-    for x in (x0, x1 - 0.015):
-        m.prism([(0.0, zt), (d, zb), (d, zb - 0.12), (0.0, zb + 0.3)], x, x + 0.015, "awning", axis="x")
-    m.push(TR(0, 0, 0))
+        m.prism([(a, zb), (b, zb), (b, zb - 0.12), ((a + b) / 2, zb - 0.19), (a, zb - 0.12)],
+                -d - 0.012, -d + 0.004, "awning")
+    for x in (x0, x1 - 0.012):
+        m.prism([(0.0, zt)] + prof[1:] + [(d, zb - 0.12), (0.0, zb + 0.35)], x, x + 0.012, "awning", axis="x")
     m.box(x0 - 0.02, -0.06, zt - 0.02, x1 + 0.02, 0.02, zt + 0.06, "iron")
-    m.pop()
+    for x in (x0 + 0.02, x1 - 0.02):
+        m.push(TR(x, 0, zb + 0.3) @ RX(-math.degrees(math.atan2(d, 0.3))))
+        m.box(-0.008, -0.008, 0, 0.008, 0.008, 0.82, "iron")
+        m.pop()
     return m
 
 
@@ -855,8 +849,61 @@ def piece_roof():
     return m
 
 
+# ---- context kit: used for the neighbouring buildings ----------------------
+MANSARD_H, MANSARD_IN = 3.3, 0.85
+
+
+def piece_mansard(corner=False):
+    """Steep tiled mansard storey with a pedimented dormer per bay."""
+    m = MB()
+    h, inset = MANSARD_H, MANSARD_IN
+    if corner:
+        t = bmesh.new()
+        pts = [(0, 0, 0), (P, 0, 0), (P, P, 0), (0, P, 0),
+               (inset, inset, h), (P, inset, h), (P, P, h), (inset, P, h)]
+        for p in pts:
+            t.verts.new(p)
+        bmesh.ops.convex_hull(t, input=t.verts)
+        m.merge(t, "tile")
+        return m
+    m.prism([(0.06, 0.0), (0.06, 0.12), (-inset, h), (-1.6, h), (-1.6, 0.0)], 0.0, BAY, "tile", axis="x")
+    m.box(0, -0.1, -0.05, BAY, 0.3, 0.15, "stone_trim", bev=0.02)
+    cx = BAY / 2
+    w, dz0, dz1 = 0.55, 0.35, 2.1
+    m.box(cx - w, -0.25, dz0, cx + w, 0.9, dz1, "stone_trim", bev=0.02)
+    m.prism([(cx - w - 0.1, dz1), (cx + w + 0.1, dz1), (cx, dz1 + 0.55)], -0.32, 0.9, "stone_trim", bev=0.015)
+    m.window(cx - w + 0.12, cx + w - 0.12, dz0 + 0.1, dz1 - 0.08, y=-0.15, fw=0.06)
+    return m
+
+
+def piece_water_tank():
+    m = MB()
+    for x in (-1.0, 1.0):
+        for y in (-1.0, 1.0):
+            m.box(x - 0.08, y - 0.08, 0, x + 0.08, y + 0.08, 2.2, "iron")
+    m.box(-1.3, -1.3, 2.2, 1.3, 1.3, 2.4, "wood")
+    staves = [(0, 2.4), (1.25, 2.4), (1.25, 5.4), (1.3, 5.4), (0.2, 6.3), (0, 6.35)]
+    m.lathe(staves, 28, "wood")
+    for z in (2.8, 3.6, 4.4, 5.1):
+        m.lathe([(1.24, z), (1.28, z), (1.28, z + 0.05), (1.24, z + 0.05)], 28, "iron", closed_prof=True)
+    return m
+
+
+def piece_lamp_post():
+    m = MB()
+    m.lathe([(0, 0), (0.22, 0), (0.22, 0.1), (0.15, 0.25), (0.12, 0.6), (0.07, 0.8), (0.06, 4.2),
+             (0.09, 4.3), (0.0, 4.32)], 16, "iron")
+    for s in (-1, 1):
+        m.box(-0.02, s * 0.02, 4.05, 0.02, s * 0.62, 4.1, "iron")
+        m.lathe([(0, 3.62), (0.06, 3.62), (0.16, 3.82), (0.17, 4.0), (0.0, 4.05)], 12, "glass",
+                cx=0.0, cy=s * 0.62)
+        m.lathe([(0, 4.0), (0.2, 4.0), (0.05, 4.18), (0, 4.2)], 12, "iron", cx=0.0, cy=s * 0.62)
+    return m
+
+
 def piece_tempietto():
     m = MB()
+    m.push(Matrix.Scale(CUPOLA, 4))
     s = 2.9
     m.box(-s, -s, 0, s, s, 0.85, "stone", bev=0.03)
     m.hsweep(PROF_STRING, [(-s, -s), (s, -s), (s, s), (-s, s)], 0.55, "stone_trim", closed=True)
@@ -892,6 +939,7 @@ def piece_tempietto():
 
 def piece_dome():
     m = MB()
+    m.push(Matrix.Scale(CUPOLA, 4))
     Rd, Hd, r_top = 2.2, 3.1, 0.58
     t_top = math.acos(r_top / Rd)
     n = 18
@@ -919,6 +967,7 @@ def piece_dome():
 
 def piece_lantern():
     m = MB()
+    m.push(Matrix.Scale(CUPOLA, 4))
     m.lathe([(0, 0), (0.72, 0), (0.72, 0.3), (0.62, 0.3), (0, 0.3)], 32, "stone_trim")
     m.lathe([(0, 0.3), (0.34, 0.3), (0.34, 1.55), (0, 1.55)], 24, "void")
     for i in range(6):
@@ -964,48 +1013,140 @@ def _base(name):
     return mat, nt, bsdf
 
 
-def mat_stone(name, c_dark, c_light, rough=0.8, speckle=False):
+def mat_stone(name, c_dark, c_light, rough=0.8, speckle=False, block_var=0.12, grime=True):
+    """Weathered stone: large-scale tone noise, per-block tone variation (random per
+    island), vertical rain streaks, street-level grime, AO soot in crevices, fine bump."""
     mat, nt, bsdf = _base(name)
     L = nt.links
-    geo = _n(nt, "ShaderNodeNewGeometry", (-1400, 0))
-    n1 = _n(nt, "ShaderNodeTexNoise", (-1100, 200), Scale=0.35, Detail=5.0, Roughness=0.6)
+    geo = _n(nt, "ShaderNodeNewGeometry", (-1600, 0))
+    n1 = _n(nt, "ShaderNodeTexNoise", (-1300, 300), Scale=0.35, Detail=5.0, Roughness=0.6)
     L.new(geo.outputs["Position"], n1.inputs["Vector"])
-    ramp = _ramp(nt, (-850, 200), c_dark, c_light, 0.35, 0.65)
+    ramp = _ramp(nt, (-1050, 300), c_dark, c_light, 0.35, 0.65)
     L.new(n1.outputs["Fac"], ramp.inputs["Fac"])
-    mp = _n(nt, "ShaderNodeMapping", (-1100, -150))
-    mp.inputs["Scale"].default_value = (2.5, 2.5, 0.12)
+    # per block tone
+    isl = _ramp(nt, (-1050, 50), [1 - block_var] * 3, [1 + block_var * 0.6] * 3, 0.0, 1.0)
+    L.new(geo.outputs["Random Per Island"], isl.inputs["Fac"])
+    m0 = _n(nt, "ShaderNodeMixRGB", (-800, 250), blend_type="MULTIPLY", Fac=1.0)
+    L.new(ramp.outputs["Color"], m0.inputs["Color1"])
+    L.new(isl.outputs["Color"], m0.inputs["Color2"])
+    # rain streaks
+    mp = _n(nt, "ShaderNodeMapping", (-1300, -150))
+    mp.inputs["Scale"].default_value = (2.5, 2.5, 0.1)
     L.new(geo.outputs["Position"], mp.inputs["Vector"])
-    n2 = _n(nt, "ShaderNodeTexNoise", (-900, -150), Scale=1.6, Detail=3.0)
+    n2 = _n(nt, "ShaderNodeTexNoise", (-1100, -150), Scale=1.6, Detail=3.0)
     L.new(mp.outputs["Vector"], n2.inputs["Vector"])
-    sr = _ramp(nt, (-700, -150), (0.72, 0.7, 0.66), (1, 1, 1), 0.38, 0.62)
+    sr = _ramp(nt, (-900, -150), (0.7, 0.68, 0.64), (1, 1, 1), 0.36, 0.62)
     L.new(n2.outputs["Fac"], sr.inputs["Fac"])
-    mul = _n(nt, "ShaderNodeMixRGB", (-450, 150), blend_type="MULTIPLY", Fac=0.7)
-    L.new(ramp.outputs["Color"], mul.inputs["Color1"])
-    L.new(sr.outputs["Color"], mul.inputs["Color2"])
-    col = mul
+    col = _n(nt, "ShaderNodeMixRGB", (-600, 150), blend_type="MULTIPLY", Fac=0.75)
+    L.new(m0.outputs["Color"], col.inputs["Color1"])
+    L.new(sr.outputs["Color"], col.inputs["Color2"])
     if speckle:
-        vor = _n(nt, "ShaderNodeTexVoronoi", (-900, -400), Scale=90.0)
+        vor = _n(nt, "ShaderNodeTexVoronoi", (-1100, -450), Scale=90.0)
         L.new(geo.outputs["Position"], vor.inputs["Vector"])
-        vr = _ramp(nt, (-700, -400), (0.35, 0.35, 0.35), (1, 1, 1), 0.0, 0.25)
+        vr = _ramp(nt, (-900, -450), (0.35, 0.35, 0.35), (1, 1, 1), 0.0, 0.25)
         L.new(vor.outputs["Distance"], vr.inputs["Fac"])
-        m2 = _n(nt, "ShaderNodeMixRGB", (-300, 0), blend_type="MULTIPLY", Fac=0.5)
+        m2 = _n(nt, "ShaderNodeMixRGB", (-450, 0), blend_type="MULTIPLY", Fac=0.5)
         L.new(col.outputs["Color"], m2.inputs["Color1"])
         L.new(vr.outputs["Color"], m2.inputs["Color2"])
         col = m2
-    ao = _n(nt, "ShaderNodeAmbientOcclusion", (-450, -250), Distance=0.35)
-    aor = _ramp(nt, (-250, -250), (0.5, 0.48, 0.45), (1, 1, 1), 0.0, 1.0)
+    if grime:
+        sz = _n(nt, "ShaderNodeSeparateXYZ", (-1300, -650))
+        L.new(geo.outputs["Position"], sz.inputs["Vector"])
+        gr = _n(nt, "ShaderNodeMapRange", (-1100, -650))
+        gr.inputs["From Min"].default_value = 0.0
+        gr.inputs["From Max"].default_value = 9.0
+        L.new(sz.outputs["Z"], gr.inputs["Value"])
+        grr = _ramp(nt, (-900, -650), (0.62, 0.6, 0.57), (1, 1, 1), 0.0, 1.0)
+        L.new(gr.outputs["Result"], grr.inputs["Fac"])
+        m4 = _n(nt, "ShaderNodeMixRGB", (-300, 0), blend_type="MULTIPLY", Fac=1.0)
+        L.new(col.outputs["Color"], m4.inputs["Color1"])
+        L.new(grr.outputs["Color"], m4.inputs["Color2"])
+        col = m4
+    ao = _n(nt, "ShaderNodeAmbientOcclusion", (-450, -300), Distance=0.3)
+    aor = _ramp(nt, (-250, -300), (0.42, 0.4, 0.37), (1, 1, 1), 0.0, 1.0)
     L.new(ao.outputs["AO"], aor.inputs["Fac"])
     m3 = _n(nt, "ShaderNodeMixRGB", (-100, 100), blend_type="MULTIPLY", Fac=1.0)
     L.new(col.outputs["Color"], m3.inputs["Color1"])
     L.new(aor.outputs["Color"], m3.inputs["Color2"])
     L.new(m3.outputs["Color"], bsdf.inputs["Base Color"])
     bsdf.inputs["Roughness"].default_value = rough
-    n3 = _n(nt, "ShaderNodeTexNoise", (-700, -600), Scale=14.0, Detail=8.0, Roughness=0.7)
+    n3 = _n(nt, "ShaderNodeTexNoise", (-700, -800), Scale=14.0, Detail=8.0, Roughness=0.7)
     L.new(geo.outputs["Position"], n3.inputs["Vector"])
-    bump = _n(nt, "ShaderNodeBump", (-250, -600), Strength=0.25, Distance=0.01)
+    bump = _n(nt, "ShaderNodeBump", (-250, -800), Strength=0.25, Distance=0.01)
     L.new(n3.outputs["Fac"], bump.inputs["Height"])
     L.new(bump.outputs["Normal"], bsdf.inputs["Normal"])
     mat["export_color"] = [(a + b) / 2 for a, b in zip(c_dark, c_light)]
+    mat["export_rough"] = rough
+    return mat
+
+
+def mat_brick(name, c_brick, c_brick2, c_mortar, scale=(4.0, 4.0, 13.0)):
+    """Running-bond brick on world coordinates (works on X- and Y-facing walls)."""
+    mat, nt, bsdf = _base(name)
+    L = nt.links
+    geo = _n(nt, "ShaderNodeNewGeometry", (-1400, 0))
+    sep = _n(nt, "ShaderNodeSeparateXYZ", (-1200, 0))
+    L.new(geo.outputs["Position"], sep.inputs["Vector"])
+    add = _n(nt, "ShaderNodeMath", (-1000, 100), operation="ADD")
+    L.new(sep.outputs["X"], add.inputs[0])
+    L.new(sep.outputs["Y"], add.inputs[1])
+    comb = _n(nt, "ShaderNodeCombineXYZ", (-800, 0))
+    L.new(add.outputs[0], comb.inputs["X"])
+    L.new(sep.outputs["Z"], comb.inputs["Y"])
+    br = _n(nt, "ShaderNodeTexBrick", (-600, 0), Scale=1.0, **{"Mortar Size": 0.012, "Brick Width": 0.23,
+                                                                   "Row Height": 0.075})
+    br.inputs["Color1"].default_value = (*c_brick, 1)
+    br.inputs["Color2"].default_value = (*c_brick2, 1)
+    br.inputs["Mortar"].default_value = (*c_mortar, 1)
+    br.offset = 0.5
+    L.new(comb.outputs["Vector"], br.inputs["Vector"])
+    nz = _n(nt, "ShaderNodeTexNoise", (-600, -300), Scale=0.4, Detail=4.0)
+    L.new(geo.outputs["Position"], nz.inputs["Vector"])
+    nr = _ramp(nt, (-400, -300), (0.7, 0.68, 0.66), (1.05, 1.03, 1.0), 0.3, 0.7)
+    L.new(nz.outputs["Fac"], nr.inputs["Fac"])
+    mm = _n(nt, "ShaderNodeMixRGB", (-200, 0), blend_type="MULTIPLY", Fac=1.0)
+    L.new(br.outputs["Color"], mm.inputs["Color1"])
+    L.new(nr.outputs["Color"], mm.inputs["Color2"])
+    ao = _n(nt, "ShaderNodeAmbientOcclusion", (-400, -500), Distance=0.3)
+    aor = _ramp(nt, (-200, -500), (0.45, 0.43, 0.4), (1, 1, 1), 0.0, 1.0)
+    L.new(ao.outputs["AO"], aor.inputs["Fac"])
+    m3 = _n(nt, "ShaderNodeMixRGB", (0, 0), blend_type="MULTIPLY", Fac=1.0)
+    L.new(mm.outputs["Color"], m3.inputs["Color1"])
+    L.new(aor.outputs["Color"], m3.inputs["Color2"])
+    L.new(m3.outputs["Color"], bsdf.inputs["Base Color"])
+    bsdf.inputs["Roughness"].default_value = 0.85
+    bump = _n(nt, "ShaderNodeBump", (0, -400), Strength=0.4, Distance=0.01, invert=True)
+    L.new(br.outputs["Fac"], bump.inputs["Height"])
+    L.new(bump.outputs["Normal"], bsdf.inputs["Normal"])
+    mat["export_color"] = list(c_brick)
+    mat["export_rough"] = 0.85
+    return mat
+
+
+def mat_setts(name, c0, c1, mortar, brick_w, row_h, tex_scale, rough=0.75):
+    """Granite setts / paving: brick texture on the ground plane (XY)."""
+    mat, nt, bsdf = _base(name)
+    L = nt.links
+    geo = _n(nt, "ShaderNodeNewGeometry", (-1000, 0))
+    br = _n(nt, "ShaderNodeTexBrick", (-600, 0), Scale=tex_scale, **{"Mortar Size": 0.02, "Brick Width": brick_w,
+                                                                     "Row Height": row_h, "Mortar Smooth": 0.3})
+    br.inputs["Color1"].default_value = (*c0, 1)
+    br.inputs["Color2"].default_value = (*c1, 1)
+    br.inputs["Mortar"].default_value = (*mortar, 1)
+    L.new(geo.outputs["Position"], br.inputs["Vector"])
+    nz = _n(nt, "ShaderNodeTexNoise", (-600, -300), Scale=0.15, Detail=4.0)
+    L.new(geo.outputs["Position"], nz.inputs["Vector"])
+    nr = _ramp(nt, (-400, -300), (0.6, 0.6, 0.6), (1.1, 1.1, 1.1), 0.3, 0.7)
+    L.new(nz.outputs["Fac"], nr.inputs["Fac"])
+    mm = _n(nt, "ShaderNodeMixRGB", (-200, 0), blend_type="MULTIPLY", Fac=1.0)
+    L.new(br.outputs["Color"], mm.inputs["Color1"])
+    L.new(nr.outputs["Color"], mm.inputs["Color2"])
+    L.new(mm.outputs["Color"], bsdf.inputs["Base Color"])
+    bsdf.inputs["Roughness"].default_value = rough
+    bump = _n(nt, "ShaderNodeBump", (0, -400), Strength=0.6, Distance=0.02, invert=True)
+    L.new(br.outputs["Fac"], bump.inputs["Height"])
+    L.new(bump.outputs["Normal"], bsdf.inputs["Normal"])
+    mat["export_color"] = list(c0)
     mat["export_rough"] = rough
     return mat
 
@@ -1022,45 +1163,74 @@ def mat_simple(name, color, rough, metal=0.0):
 
 
 def make_materials():
-    MATS["stone"] = mat_stone("M_Limestone", (0.54, 0.51, 0.45), (0.74, 0.71, 0.63))
-    MATS["stone_trim"] = mat_stone("M_Limestone_Trim", (0.60, 0.57, 0.50), (0.79, 0.76, 0.68), 0.75)
+    MATS["stone"] = mat_stone("M_Limestone", (0.55, 0.52, 0.46), (0.75, 0.72, 0.64))
+    MATS["stone_trim"] = mat_stone("M_Limestone_Trim", (0.60, 0.57, 0.50), (0.79, 0.76, 0.68), 0.75,
+                                   block_var=0.06)
     MATS["granite"] = mat_stone("M_Granite", (0.28, 0.26, 0.25), (0.42, 0.39, 0.37), 0.6, speckle=True)
+    MATS["brownstone"] = mat_stone("M_Brownstone", (0.2, 0.12, 0.09), (0.32, 0.2, 0.15), 0.8)
+    MATS["buff"] = mat_stone("M_Buff_Terracotta", (0.5, 0.42, 0.32), (0.66, 0.57, 0.45), 0.8)
+    MATS["buff_trim"] = mat_stone("M_Buff_Trim", (0.58, 0.5, 0.4), (0.74, 0.66, 0.54), 0.75, block_var=0.05)
+    MATS["brick_red"] = mat_brick("M_Brick_Red", (0.3, 0.085, 0.05), (0.22, 0.07, 0.045), (0.42, 0.4, 0.36))
+    MATS["brick_brown"] = mat_brick("M_Brick_Brown", (0.25, 0.14, 0.09), (0.19, 0.11, 0.075), (0.4, 0.38, 0.34))
+    MATS["setts"] = mat_setts("M_Street_Setts", (0.12, 0.115, 0.11), (0.07, 0.068, 0.065), (0.04, 0.04, 0.04),
+                              0.28, 0.13, 1.0)
+    MATS["paving"] = mat_setts("M_Sidewalk_Flags", (0.42, 0.41, 0.39), (0.36, 0.35, 0.33), (0.2, 0.2, 0.2),
+                               1.0, 0.5, 0.666, 0.85)
+    MATS["tile"] = mat_brick("M_Roof_Tile", (0.36, 0.1, 0.06), (0.27, 0.075, 0.05), (0.12, 0.05, 0.04))
 
-    mat, nt, bsdf = mat_simple("M_Glass", (0.012, 0.016, 0.02), 0.04)
+    # glass: thin clear pane (interior rooms show through) or drawn blinds per window
+    mat, nt, bsdf = mat_simple("M_Glass", (0.8, 0.82, 0.82), 0.02)
+    bsdf.inputs["Transmission Weight"].default_value = 1.0
+    bsdf.inputs["IOR"].default_value = 1.52
     L = nt.links
+    out = nt.nodes["Material Output"]
     tc = _n(nt, "ShaderNodeTexCoord", (-1000, 0))
     oi = _n(nt, "ShaderNodeObjectInfo", (-1000, -300))
     sep = _n(nt, "ShaderNodeSeparateXYZ", (-800, 0))
     L.new(tc.outputs["Object"], sep.inputs["Vector"])
-    # blind line = 3.1 - random*2.0 ; show blinds on ~55% of windows
     mr = _n(nt, "ShaderNodeMath", (-800, -300), operation="MULTIPLY_ADD")
     L.new(oi.outputs["Random"], mr.inputs[0])
-    mr.inputs[1].default_value = -2.2
-    mr.inputs[2].default_value = 3.3
+    mr.inputs[1].default_value = -2.4
+    mr.inputs[2].default_value = 3.1
     gt = _n(nt, "ShaderNodeMath", (-600, 0), operation="GREATER_THAN")
     L.new(sep.outputs["Z"], gt.inputs[0])
     L.new(mr.outputs[0], gt.inputs[1])
     r2 = _n(nt, "ShaderNodeMath", (-600, -300), operation="GREATER_THAN")
     L.new(oi.outputs["Random"], r2.inputs[0])
-    r2.inputs[1].default_value = 0.68
+    r2.inputs[1].default_value = 0.6
     fac = _n(nt, "ShaderNodeMath", (-400, -100), operation="MULTIPLY")
     L.new(gt.outputs[0], fac.inputs[0])
     L.new(r2.outputs[0], fac.inputs[1])
-    mix = _n(nt, "ShaderNodeMixRGB", (-200, 100), Color1=(0.012, 0.016, 0.02, 1), Color2=(0.46, 0.43, 0.36, 1))
+    blind = _n(nt, "ShaderNodeBsdfDiffuse", (-200, -400))
+    blind.inputs["Color"].default_value = (0.52, 0.48, 0.4, 1)
+    mix = _n(nt, "ShaderNodeMixShader", (100, 0))
     L.new(fac.outputs[0], mix.inputs["Fac"])
-    L.new(mix.outputs["Color"], bsdf.inputs["Base Color"])
-    rm = _n(nt, "ShaderNodeMapRange", (-200, -200))
-    rm.inputs["To Min"].default_value = 0.04
-    rm.inputs["To Max"].default_value = 0.85
-    L.new(fac.outputs[0], rm.inputs["Value"])
-    L.new(rm.outputs["Result"], bsdf.inputs["Roughness"])
+    L.new(bsdf.outputs["BSDF"], mix.inputs[1])
+    L.new(blind.outputs["BSDF"], mix.inputs[2])
+    L.new(mix.outputs["Shader"], out.inputs["Surface"])
+    mat["export_color"] = [0.05, 0.06, 0.07]
     MATS["glass"] = mat
+
+    # interior rooms: random wall tone per window, a little darker toward the back
+    mat, nt, bsdf = mat_simple("M_Interior_Room", (0.2, 0.18, 0.15), 0.9)
+    L = nt.links
+    oi = _n(nt, "ShaderNodeObjectInfo", (-800, 0))
+    rp = _ramp(nt, (-600, 0), (0.05, 0.045, 0.04), (0.42, 0.36, 0.28), 0.0, 1.0)
+    L.new(oi.outputs["Random"], rp.inputs["Fac"])
+    L.new(rp.outputs["Color"], bsdf.inputs["Base Color"])
+    em = _n(nt, "ShaderNodeMath", (-600, -300), operation="MULTIPLY")
+    L.new(oi.outputs["Random"], em.inputs[0])
+    em.inputs[1].default_value = 0.35
+    bsdf.inputs["Emission Color"].default_value = (1.0, 0.85, 0.6, 1)
+    L.new(em.outputs[0], bsdf.inputs["Emission Strength"])
+    MATS["room"] = mat
 
     MATS["frame"] = mat_simple("M_Frame_Paint", (0.03, 0.04, 0.035), 0.45)[0]
     MATS["iron"] = mat_simple("M_Iron", (0.05, 0.055, 0.05), 0.5, 0.6)[0]
     MATS["roof"] = mat_simple("M_Roof_Tar", (0.09, 0.09, 0.09), 0.9)[0]
     MATS["void"] = mat_simple("M_Interior_Void", (0.004, 0.004, 0.004), 1.0)[0]
     MATS["gilt"] = mat_simple("M_Gilt", (0.83, 0.62, 0.27), 0.28, 1.0)[0]
+    MATS["wood"] = mat_stone("M_Weathered_Wood", (0.16, 0.12, 0.09), (0.28, 0.22, 0.16), 0.85, grime=False)
 
     mat, nt, bsdf = mat_simple("M_Copper_Dome", (0.13, 0.11, 0.08), 0.42, 0.75)
     L = nt.links
@@ -1083,7 +1253,7 @@ def make_materials():
     L.new(tc.outputs["Object"], sep.inputs["Vector"])
     s1 = _n(nt, "ShaderNodeMath", (-600, 0), operation="MULTIPLY")
     L.new(sep.outputs["X"], s1.inputs[0])
-    s1.inputs[1].default_value = 2 * pi / 0.28
+    s1.inputs[1].default_value = 2 * pi / 0.24
     s2 = _n(nt, "ShaderNodeMath", (-450, 0), operation="SINE")
     L.new(s1.outputs[0], s2.inputs[0])
     s3 = _n(nt, "ShaderNodeMath", (-300, 0), operation="GREATER_THAN")
@@ -1093,68 +1263,14 @@ def make_materials():
     L.new(s3.outputs[0], stripe.inputs["Fac"])
     pick = _n(nt, "ShaderNodeMath", (-450, -300), operation="GREATER_THAN")
     L.new(oi.outputs["Random"], pick.inputs[0])
-    pick.inputs[1].default_value = 0.55
-    final = _n(nt, "ShaderNodeMixRGB", (0, 0), Color1=(0.8, 0.77, 0.68, 1))
+    pick.inputs[1].default_value = 0.78
+    final = _n(nt, "ShaderNodeMixRGB", (0, 0), Color1=(0.78, 0.75, 0.66, 1))
     L.new(pick.outputs[0], final.inputs["Fac"])
     L.new(stripe.outputs["Color"], final.inputs["Color2"])
     L.new(final.outputs["Color"], bsdf.inputs["Base Color"])
     bsdf.inputs["Subsurface Weight"].default_value = 0.0
+    bsdf.inputs["Transmission Weight"].default_value = 0.0
     MATS["awning"] = mat
-
-
-def mat_context():
-    """Facade material with a procedural window grid for background buildings."""
-    mat, nt, bsdf = _base("M_Context_Facade")
-    L = nt.links
-    geo = _n(nt, "ShaderNodeNewGeometry", (-1400, 0))
-    sep = _n(nt, "ShaderNodeSeparateXYZ", (-1200, 0))
-    L.new(geo.outputs["Position"], sep.inputs["Vector"])
-    add = _n(nt, "ShaderNodeMath", (-1000, 100), operation="ADD")
-    L.new(sep.outputs["X"], add.inputs[0])
-    L.new(sep.outputs["Y"], add.inputs[1])
-
-    def band(src, period, lo, hi, loc):
-        dv = _n(nt, "ShaderNodeMath", loc, operation="DIVIDE")
-        L.new(src, dv.inputs[0])
-        dv.inputs[1].default_value = period
-        fr = _n(nt, "ShaderNodeMath", (loc[0] + 150, loc[1]), operation="FRACT")
-        L.new(dv.outputs[0], fr.inputs[0])
-        a = _n(nt, "ShaderNodeMath", (loc[0] + 300, loc[1]), operation="GREATER_THAN")
-        L.new(fr.outputs[0], a.inputs[0])
-        a.inputs[1].default_value = lo
-        b = _n(nt, "ShaderNodeMath", (loc[0] + 300, loc[1] - 150), operation="LESS_THAN")
-        L.new(fr.outputs[0], b.inputs[0])
-        b.inputs[1].default_value = hi
-        m = _n(nt, "ShaderNodeMath", (loc[0] + 450, loc[1]), operation="MULTIPLY")
-        L.new(a.outputs[0], m.inputs[0])
-        L.new(b.outputs[0], m.inputs[1])
-        return m.outputs[0]
-    bx = band(add.outputs[0], 2.4, 0.28, 0.72, (-900, 100))
-    bz = band(sep.outputs["Z"], 3.5, 0.3, 0.82, (-900, -300))
-    win = _n(nt, "ShaderNodeMath", (-300, 0), operation="MULTIPLY")
-    L.new(bx, win.inputs[0])
-    L.new(bz, win.inputs[1])
-    nrm = _n(nt, "ShaderNodeSeparateXYZ", (-600, -600))
-    L.new(geo.outputs["Normal"], nrm.inputs["Vector"])
-    up = _n(nt, "ShaderNodeMath", (-400, -600), operation="LESS_THAN")
-    L.new(nrm.outputs["Z"], up.inputs[0])
-    up.inputs[1].default_value = 0.5
-    win2 = _n(nt, "ShaderNodeMath", (-150, -200), operation="MULTIPLY")
-    L.new(win.outputs[0], win2.inputs[0])
-    L.new(up.outputs[0], win2.inputs[1])
-    oi = _n(nt, "ShaderNodeObjectInfo", (-600, 400))
-    wall = _n(nt, "ShaderNodeMixRGB", (-300, 400), Color1=(0.15, 0.075, 0.055, 1), Color2=(0.33, 0.31, 0.28, 1))
-    L.new(oi.outputs["Random"], wall.inputs["Fac"])
-    mix = _n(nt, "ShaderNodeMixRGB", (0, 200), Color2=(0.02, 0.022, 0.025, 1))
-    L.new(win2.outputs[0], mix.inputs["Fac"])
-    L.new(wall.outputs["Color"], mix.inputs["Color1"])
-    L.new(mix.outputs["Color"], bsdf.inputs["Base Color"])
-    rr = _n(nt, "ShaderNodeMapRange", (0, -200))
-    rr.inputs["To Min"].default_value = 0.85
-    rr.inputs["To Max"].default_value = 0.1
-    L.new(win2.outputs[0], rr.inputs["Value"])
-    L.new(rr.outputs["Result"], bsdf.inputs["Roughness"])
-    return mat
 
 
 # --------------------------------------------------------------------------
@@ -1196,16 +1312,13 @@ def build_kit(coll):
         ("SM_Wall_Win_Shaft", piece_wall_shaft),
         ("SM_Wall_Arch_2F", piece_wall_arch),
         ("SM_Wall_Colonnade_2F", piece_wall_colonnade),
-        ("SM_Wall_Attic", piece_wall_attic),
         ("SM_Pier_Corner_Ground", piece_pier_ground),
-        ("SM_Pier_Corner_Rustic", lambda: pier(FL, 0.6, "stone", 0.06)),
-        ("SM_Pier_Corner_Shaft", lambda: pier(FL, 0.45, "stone", 0.03)),
-        ("SM_Pier_Corner_Attic", lambda: pier(2.8, 0.7, "stone", 0.03)),
+        ("SM_Pier_Corner_Rustic", lambda: pier(FL, 0.56, "stone", 0.06)),
+        ("SM_Pier_Corner_Shaft", lambda: pier(FL, 0.48, "stone", 0.03)),
         ("SM_Window_Shop", piece_window_shop),
         ("SM_Door_Entrance", piece_door_entrance),
         ("SM_Window_Sash", piece_window_sash),
         ("SM_Window_Arch_2F", piece_window_arch),
-        ("SM_Window_Attic", piece_window_attic),
         ("SM_Cornice_Main", lambda: piece_cornice("main")),
         ("SM_Cornice_Main_Corner", lambda: piece_cornice("main", True)),
         ("SM_Cornice_Mid", lambda: piece_cornice("mid")),
@@ -1226,9 +1339,41 @@ def build_kit(coll):
         ("SM_Tempietto", piece_tempietto),
         ("SM_Dome", piece_dome),
         ("SM_Lantern", piece_lantern),
+        ("SM_Mansard", piece_mansard),
+        ("SM_Mansard_Corner", lambda: piece_mansard(True)),
+        ("SM_Water_Tank", piece_water_tank),
+        ("SM_Lamp_Post", piece_lamp_post),
     ]
     for name, fn in pieces:
         finish(fn(), name, coll)
+
+
+# Material variants of kit pieces for the neighbouring buildings: same meshes,
+# different facade materials (red / brown brick, buff terracotta).
+VARIANTS = {
+    "_BrickRed": {"stone": "brick_red", "stone_trim": "brownstone"},
+    "_BrickBrown": {"stone": "brick_brown", "stone_trim": "buff"},
+    "_Buff": {"stone": "buff", "stone_trim": "buff_trim"},
+}
+VARIANT_PIECES = ["SM_Wall_Ground_Shop", "SM_Wall_Win_Shaft", "SM_Wall_Win_Hood", "SM_Pier_Corner_Ground",
+                  "SM_Pier_Corner_Shaft", "SM_Cornice_Mid", "SM_Cornice_Mid_Corner", "SM_String_Course",
+                  "SM_String_Course_Corner", "SM_Mansard", "SM_Mansard_Corner"]
+
+
+def build_variants(coll):
+    for suffix, remap in VARIANTS.items():
+        for name in VARIANT_PIECES:
+            me = KIT[name].data.copy()
+            me.name = name + suffix
+            for i, mat in enumerate(me.materials):
+                key = MAT_NAMES[i]
+                if key in remap:
+                    me.materials[i] = MATS[remap[key]]
+            ob = bpy.data.objects.new(name + suffix, me)
+            coll.objects.link(ob)
+            ob.hide_render = True
+            ob.location = (0, 0, -500)
+            KIT[name + suffix] = ob
 
 
 # --------------------------------------------------------------------------
@@ -1238,7 +1383,7 @@ class Assembler:
     def __init__(self, coll, root):
         self.coll, self.root, self.count = coll, root, 0
 
-    def put(self, piece, M, tag=""):
+    def put(self, piece, M):
         ob = bpy.data.objects.new(f"{piece}.{self.count:04d}", KIT[piece].data)
         self.count += 1
         ob.matrix_basis = M
@@ -1253,152 +1398,254 @@ def facades(ox, oy, nx, ny):
             ((ox + w, oy + d), 180, nx, "N"), ((ox, oy + d), 270, ny, "W")]
 
 
+def ring(A, ox, oy, nx, ny, z, wall=None, pier=None, inserts=(), corner=None, straight=None,
+         skip=(), extra=None, sides="SENW", var=""):
+    """Place one storey (or one horizontal band) of modules around a rectangular block."""
+    for (fx, fy), rot, n, name in facades(ox, oy, nx, ny):
+        if name not in sides:
+            continue
+        F = TR(fx, fy, 0) @ RZ(rot)
+        if pier:
+            pname, dzs = pier if isinstance(pier, tuple) else (pier, (0.0,))
+            for dz in dzs:
+                A.put(pname + var, F @ TR(0, 0, z + dz))
+        if corner:
+            A.put(corner + var, F @ TR(0, 0, z))
+        for i in range(n):
+            if (name, i) in skip:
+                continue
+            B = F @ TR(P + i * BAY, 0, z)
+            if wall:
+                A.put(wall + var, B)
+            if straight:
+                A.put(straight + var, B)
+            for piece, dy, dz in inserts:
+                A.put(piece, B @ TR(0, dy, dz))
+            if extra:
+                extra(name, i, n, B)
+
+
 def assemble(coll, root, seed=7):
     rnd = random.Random(seed)
     A = Assembler(coll, root)
-
-    def ring(ox, oy, nx, ny, z, wall=None, pier=None, inserts=(), corner=None, straight=None,
-             sz=1.0, skip=(), extra=None):
-        for (fx, fy), rot, n, name in facades(ox, oy, nx, ny):
-            F = TR(fx, fy, 0) @ RZ(rot)
-            if pier:
-                for dz in (pier[1] if isinstance(pier, tuple) else (0.0,)):
-                    A.put(pier[0] if isinstance(pier, tuple) else pier, F @ TR(0, 0, z + dz))
-            if corner:
-                A.put(corner, F @ TR(0, 0, z))
-            for i in range(n):
-                if (name, i) in skip:
-                    continue
-                B = F @ TR(P + i * BAY, 0, z)
-                if wall:
-                    A.put(wall, B)
-                if straight:
-                    A.put(straight, B)
-                for piece, dy, dz in inserts:
-                    A.put(piece, B @ TR(0, dy, dz))
-                if extra:
-                    extra(name, i, n, B)
-
-    ENT = ("E", 6)
     ox = oy = 0.0
-    # ground floor + entrance
-    ring(ox, oy, NX, NY, 0.0, "SM_Wall_Ground_Shop", "SM_Pier_Corner_Ground",
+    ENT = ("E", 7)
+    SASH = [("SM_Window_Sash", 0, 0)]
+
+    def awnings(p):
+        def f(name, i, n, B):
+            if rnd.random() < p:
+                A.put("SM_Awning", B)
+        return f
+
+    # F0 ground floor (+ two-storey entrance on Nassau St)
+    ring(A, ox, oy, NX, NY, 0.0, "SM_Wall_Ground_Shop", "SM_Pier_Corner_Ground",
          [("SM_Window_Shop", 0, 0)], skip={ENT})
     F = TR(W, 0, 0) @ RZ(90) @ TR(P + ENT[1] * BAY, 0, 0)
     A.put("SM_Wall_Ground_Entrance", F)
     A.put("SM_Door_Entrance", F)
-    ring(ox, oy, NX, NY, GF - 0.3, corner="SM_String_Course_Corner", straight="SM_String_Course", skip={ENT})
+    ring(A, ox, oy, NX, NY, GF - 0.3, corner="SM_String_Course_Corner", straight="SM_String_Course", skip={ENT})
     z = GF
+    # F1-F2 rusticated base
     for f in range(2):
-        ring(ox, oy, NX, NY, z, "SM_Wall_Base_Rustic", "SM_Pier_Corner_Rustic", [("SM_Window_Sash", 0, 0)],
-             skip={ENT} if f == 0 else ())
+        ring(A, ox, oy, NX, NY, z, "SM_Wall_Base_Rustic", "SM_Pier_Corner_Rustic", SASH,
+             skip={ENT} if f == 0 else (), extra=awnings(0.35))
         z += FL
-    ring(ox, oy, NX, NY, z - 0.35, corner="SM_Cornice_Base_Corner", straight="SM_Cornice_Base")
-
-    def awnings(name, i, n, B):
-        if rnd.random() < 0.3:
-            A.put("SM_Awning", B)
-
-    ring(ox, oy, NX, NY, z, "SM_Wall_Win_Hood", "SM_Pier_Corner_Shaft", [("SM_Window_Sash", 0, 0)])
+    ring(A, ox, oy, NX, NY, z - 0.35, corner="SM_Cornice_Base_Corner", straight="SM_Cornice_Base")
+    # F3 hooded windows
+    ring(A, ox, oy, NX, NY, z, "SM_Wall_Win_Hood", "SM_Pier_Corner_Shaft", SASH, extra=awnings(0.4))
     z += FL
-    ring(ox, oy, NX, NY, z - 0.12, corner="SM_String_Course_Corner", straight="SM_String_Course")
+    ring(A, ox, oy, NX, NY, z - 0.12, corner="SM_String_Course_Corner", straight="SM_String_Course")
+    # F4-F11 shaft, balconettes on two levels
+    shaft_aw = awnings(0.45)
     for f in range(8):
         def extra(name, i, n, B, f=f):
             if f in (3, 6) and (name in "SN" or i in (0, n - 1)):
                 A.put("SM_Balconette", B @ TR(0, 0, WIN[2] - 0.16))
             elif f not in (3, 6):
-                awnings(name, i, n, B)
-        ring(ox, oy, NX, NY, z, "SM_Wall_Win_Shaft", "SM_Pier_Corner_Shaft", [("SM_Window_Sash", 0, 0)],
-             extra=extra)
+                shaft_aw(name, i, n, B)
+        ring(A, ox, oy, NX, NY, z, "SM_Wall_Win_Shaft", "SM_Pier_Corner_Shaft", SASH, extra=extra)
         z += FL
-    # two-storey arcade with continuous balcony
-    ring(ox, oy, NX, NY, z, "SM_Wall_Arch_2F", ("SM_Pier_Corner_Shaft", (0.0, FL)), [("SM_Window_Arch_2F", 0, 0)])
-    ring(ox, oy, NX, NY, z + 0.42, corner="SM_Balcony_Corner", straight="SM_Balcony")
+    # F12-F13 arcade with continuous balcony
+    ring(A, ox, oy, NX, NY, z, "SM_Wall_Arch_2F", ("SM_Pier_Corner_Shaft", (0.0, FL)), [("SM_Window_Arch_2F", 0, 0)])
+    ring(A, ox, oy, NX, NY, z + 0.38, corner="SM_Balcony_Corner", straight="SM_Balcony")
     z += 2 * FL
-    ring(ox, oy, NX, NY, z, "SM_Wall_Win_Shaft", "SM_Pier_Corner_Shaft", [("SM_Window_Sash", 0, 0)],
-         extra=awnings)
+    # F14
+    ring(A, ox, oy, NX, NY, z, "SM_Wall_Win_Shaft", "SM_Pier_Corner_Shaft", SASH, extra=awnings(0.3))
     z += FL
-    ring(ox, oy, NX, NY, z - 0.2, corner="SM_Cornice_Mid_Corner", straight="SM_Cornice_Mid")
+    ring(A, ox, oy, NX, NY, z - 0.2, corner="SM_Cornice_Mid_Corner", straight="SM_Cornice_Mid")
     ctop = z - 0.2 + 0.86
-    # colonnade
-    def cols(name, i, n, B, z0=ctop, h=z + 2 * FL - ctop):
-        if i > 0:
-            A.put("SM_Column_2F", B @ TR(0, 0.02, z0 - B.translation.z) @ Matrix.Diagonal((1, 1, h / COL_H, 1)))
-    ring(ox, oy, NX, NY, z, "SM_Wall_Colonnade_2F", ("SM_Pier_Corner_Rustic", (0.0, FL)),
-         [("SM_Window_Sash", 0.25, 0.0), ("SM_Window_Sash", 0.25, FL)], extra=cols)
+
+    def columns(z0, h, dy=-0.3):
+        def f(name, i, n, B):
+            if i > 0:
+                A.put("SM_Column_2F", B @ TR(0, dy, z0 - B.translation.z) @ Matrix.Diagonal((1, 1, h / COL_H, 1)))
+        return f
+    # F15-F16 colonnade crown
+    ring(A, ox, oy, NX, NY, z, "SM_Wall_Colonnade_2F", ("SM_Pier_Corner_Rustic", (0.0, FL)),
+         [("SM_Window_Sash", 0.25, 0.0), ("SM_Window_Sash", 0.25, FL)], extra=columns(ctop, z + 2 * FL - ctop))
     z += 2 * FL
-    ring(ox, oy, NX, NY, z, "SM_Wall_Attic", "SM_Pier_Corner_Attic", [("SM_Window_Attic", 0, 0)])
-    z += 2.8
-    ring(ox, oy, NX, NY, z - 0.5, corner="SM_Cornice_Main_Corner", straight="SM_Cornice_Main")
+    ring(A, ox, oy, NX, NY, z - 0.5, corner="SM_Cornice_Main_Corner", straight="SM_Cornice_Main")
     roof = z - 0.5 + 1.54
     A.put("SM_Roof_Slab", TR(0.05, 0.05, z - 1.0) @ Matrix.Diagonal((W - 0.1, D - 0.1, roof - z + 1.0, 1)))
-    ring(ox, oy, NX, NY, roof, corner="SM_Balustrade_Corner", straight="SM_Balustrade")
+    ring(A, ox, oy, NX, NY, roof, corner="SM_Balustrade_Corner", straight="SM_Balustrade")
     for (fx, fy), rot, n, name in facades(ox, oy, NX, NY):
         A.put("SM_Urn", TR(fx, fy, roof + 1.11) @ RZ(rot))
 
-    # ---------------- tower ----------------
+    # ---------------- tower: 3 storeys + cupola ----------------
     TN = 2
     TW = 2 * P + TN * BAY
-    tx, ty = (W - TW) / 2, 1.6
+    tx, ty = (W - TW) / 2, (W - TW) / 2
     z = roof
     A.put("SM_Roof_Slab", TR(tx + 0.05, ty + 0.05, z - 0.5) @ Matrix.Diagonal((TW - 0.1, TW - 0.1, 0.5, 1)))
-    ring(tx, ty, TN, TN, z, "SM_Wall_Win_Shaft", "SM_Pier_Corner_Shaft", [("SM_Window_Sash", 0, 0)])
+    ring(A, tx, ty, TN, TN, z, "SM_Wall_Win_Shaft", "SM_Pier_Corner_Shaft", SASH)
     z += FL
-    ring(tx, ty, TN, TN, z - 0.12, corner="SM_String_Course_Corner", straight="SM_String_Course")
-
-    def tcols(name, i, n, B, z0=z + 0.22, h=2 * FL - 0.22):
-        if i > 0:
-            A.put("SM_Column_2F", B @ TR(0, -0.3, z0 - B.translation.z) @ Matrix.Diagonal((1, 1, h / COL_H, 1)))
-    ring(tx, ty, TN, TN, z, "SM_Wall_Arch_2F", ("SM_Pier_Corner_Shaft", (0.0, FL)),
-         [("SM_Window_Arch_2F", 0, 0)], extra=tcols)
+    ring(A, tx, ty, TN, TN, z - 0.12, corner="SM_String_Course_Corner", straight="SM_String_Course")
+    ring(A, tx, ty, TN, TN, z, "SM_Wall_Arch_2F", ("SM_Pier_Corner_Shaft", (0.0, FL)),
+         [("SM_Window_Arch_2F", 0, 0)], extra=columns(z + 0.22, 2 * FL - 0.22))
     z += 2 * FL
-    ring(tx, ty, TN, TN, z - 0.5, corner="SM_Cornice_Main_Corner", straight="SM_Cornice_Main")
+    ring(A, tx, ty, TN, TN, z - 0.5, corner="SM_Cornice_Main_Corner", straight="SM_Cornice_Main")
     ttop = z - 0.5 + 1.54
     A.put("SM_Roof_Slab", TR(tx + 0.05, ty + 0.05, z - 1.0) @ Matrix.Diagonal((TW - 0.1, TW - 0.1, ttop - z + 1.0, 1)))
-    ring(tx, ty, TN, TN, ttop, corner="SM_Balustrade_Corner", straight="SM_Balustrade")
+    ring(A, tx, ty, TN, TN, ttop, corner="SM_Balustrade_Corner", straight="SM_Balustrade")
     for (fx, fy), rot, n, name in facades(tx, ty, TN, TN):
         A.put("SM_Urn", TR(fx, fy, ttop + 1.11) @ RZ(rot))
     c = (tx + TW / 2, ty + TW / 2)
     A.put("SM_Tempietto", TR(c[0], c[1], ttop))
-    A.put("SM_Dome", TR(c[0], c[1], ttop + 7.42))
-    dome_top = ttop + 7.42 + 0.18 + 3.1 * sin(math.acos(0.58 / 2.2))
-    A.put("SM_Lantern", TR(c[0], c[1], dome_top - 0.05))
-    return A.count, dome_top + 4.75
+    zd = ttop + 7.42 * CUPOLA
+    A.put("SM_Dome", TR(c[0], c[1], zd))
+    dome_top = zd + CUPOLA * (0.18 + 3.1 * sin(math.acos(0.58 / 2.2)))
+    A.put("SM_Lantern", TR(c[0], c[1], dome_top - 0.05 * CUPOLA))
+    return A.count, dome_top + 4.75 * CUPOLA
+
+
+def neighbour(A, rnd, ox, oy, nx, ny, floors, var, mansard=False, sides="SENW", tank=False, aw=0.2):
+    """A plain commercial block built from material variants of the same kit."""
+    w, d = 2 * P + nx * BAY, 2 * P + ny * BAY
+
+    def awn(name, i, n, B):
+        if rnd.random() < aw:
+            A.put("SM_Awning", B)
+    ring(A, ox, oy, nx, ny, 0.0, "SM_Wall_Ground_Shop", "SM_Pier_Corner_Ground", [("SM_Window_Shop", 0, 0)],
+         var=var, sides=sides)
+    ring(A, ox, oy, nx, ny, GF - 0.3, corner="SM_String_Course", straight="SM_String_Course", var=var, sides=sides)
+    z = GF
+    for f in range(floors):
+        ring(A, ox, oy, nx, ny, z, "SM_Wall_Win_Hood" if f == 0 else "SM_Wall_Win_Shaft", "SM_Pier_Corner_Shaft",
+             [("SM_Window_Sash", 0, 0)], extra=awn, var=var, sides=sides)
+        z += FL
+    ring(A, ox, oy, nx, ny, z - 0.2, corner="SM_Cornice_Mid_Corner", straight="SM_Cornice_Mid", var=var,
+         sides=sides)
+    top = z - 0.2 + 0.86
+    A.put("SM_Roof_Slab", TR(ox + 0.05, oy + 0.05, z - 0.5) @ Matrix.Diagonal((w - 0.1, d - 0.1, top - z + 0.5, 1)))
+    if mansard:
+        ring(A, ox, oy, nx, ny, top, corner="SM_Mansard_Corner", straight="SM_Mansard", var=var, sides=sides)
+        A.put("SM_Roof_Slab", TR(ox + 1.0, oy + 1.0, top) @ Matrix.Diagonal((w - 2.0, d - 2.0, MANSARD_H, 1)))
+        top += MANSARD_H
+    if tank:
+        A.put("SM_Water_Tank", TR(ox + w * 0.65, oy + d * 0.6, top))
+    for k in range(int(w // 6) + 1):
+        A.put("SM_Roof_Slab", TR(ox + 0.3 + k * 5.5, oy + d - 1.2, top) @ Matrix.Diagonal((0.9, 0.7, 1.6, 1)))
+    return top
+
+
+def build_neighbours(coll, root, seed=11):
+    rnd = random.Random(seed)
+    A = Assembler(coll, root)
+    nb = []
+    # west of the Gillender along Wall St: red brick with a tiled mansard (as in the photo)
+    nb.append(neighbour(A, rnd, -0.3 - (2 * P + 7 * BAY), 0.0, 7, 10, 6, "_BrickRed", mansard=True, aw=0.35))
+    nb.append(neighbour(A, rnd, -0.6 - 2 * (2 * P + 7 * BAY) + 2.0, 0.0, 6, 10, 4, "_BrickBrown", mansard=True,
+                        tank=True))
+    # north along Nassau St
+    nb.append(neighbour(A, rnd, 0.0, D + 0.3, NX + 1, 7, 10, "_BrickBrown", tank=True, sides="SEN"))
+    nb.append(neighbour(A, rnd, 0.0, D + 0.3 + 2 * P + 7 * BAY + 0.3, NX + 2, 8, 7, "_Buff", tank=True))
+    # across Nassau St
+    nb.append(neighbour(A, rnd, W + 18.0, 4.0, 5, 8, 8, "_Buff", aw=0.3))
+    nb.append(neighbour(A, rnd, W + 18.0, 4.0 + 2 * P + 8 * BAY + 0.3, 6, 7, 12, "_BrickRed", tank=True))
+    # tall white office block behind, like the one behind the Gillender in the photo
+    nb.append(neighbour(A, rnd, -24.0, 30.0, 6, 6, 15, "_Buff", tank=True))
+    # fill the surrounding blocks so the street scene reads as a dense downtown
+    x = -30.5
+    for k, (nx, fl, var) in enumerate(((5, 9, "_Buff"), (6, 5, "_BrickRed"), (5, 12, "_BrickBrown"))):
+        x -= 2 * P + nx * BAY + 0.3
+        nb.append(neighbour(A, rnd, x, 0.0, nx, 10, fl, var, mansard=k == 1, tank=k != 1))
+    y_s = -4.0 - 14.0 - 4.0 - 0.3 - (2 * P + 8 * BAY)
+    x = -60.0
+    for nx, fl, var in ((6, 7, "_BrickBrown"), (5, 10, "_Buff"), (6, 6, "_BrickRed"), (4, 13, "_Buff")):
+        nb.append(neighbour(A, rnd, x, y_s, nx, 8, fl, var, tank=True, sides="NEW"))
+        x += 2 * P + nx * BAY + 0.3
+    for (x0, y0, nx, ny, fl, var) in ((-50, 30, 5, 6, 18, "_BrickBrown"), (-6, 50, 6, 6, 20, "_Buff"),
+                                      (W + 22, 60, 6, 6, 16, "_Buff"), (-40, 55, 6, 5, 11, "_BrickRed")):
+        nb.append(neighbour(A, rnd, x0, y0, nx, ny, fl, var, tank=True, aw=0.1))
+    return A.count
 
 
 # --------------------------------------------------------------------------
 # Scene: context, lights, cameras, render
 # --------------------------------------------------------------------------
-def add_box_obj(name, x0, y0, z0, x1, y1, z1, mat, coll):
-    mb = MB()
-    mb.box(x0, y0, z0, x1, y1, z1, "roof")
+def mesh_obj(name, mb, coll, mats):
     bm = mb.bm
     bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    uv = bm.loops.layers.uv.new("UVMap")
     for f in bm.faces:
-        f.material_index = 0
+        for lp in f.loops:
+            lp[uv].uv = (lp.vert.co.x * 0.5, lp.vert.co.y * 0.5)
     me = bpy.data.meshes.new(name)
     bm.to_mesh(me)
     bm.free()
-    me.materials.append(mat)
+    for mt in mats:
+        me.materials.append(mt)
+    me.set_sharp_from_angle(angle=radians(40))
     ob = bpy.data.objects.new(name, me)
     coll.objects.link(ob)
     return ob
 
 
-def build_context(coll):
-    asphalt = mat_simple("M_Asphalt", (0.045, 0.045, 0.047), 0.7)[0]
-    walk = mat_stone("M_Sidewalk", (0.3, 0.3, 0.29), (0.42, 0.41, 0.4), 0.85)
-    ctx = mat_context()
-    add_box_obj("Ground_Street", -20000, -20000, -0.3, 20000, 20000, 0.0, asphalt, coll)
-    add_box_obj("Sidewalk_S", -60, -5.0, 0.0, W + 5.0, 0.0, 0.16, walk, coll)
-    add_box_obj("Sidewalk_E", W, -5.0, 0.0, W + 5.0, 90, 0.16, walk, coll)
-    add_box_obj("Sidewalk_Opp_S", -60, -30, 0.0, W + 5.0, -19, 0.16, walk, coll)
-    add_box_obj("Sidewalk_Opp_E", W + 19, -30, 0.0, W + 30, 90, 0.16, walk, coll)
-    blocks = [(-22, 0.0, -0.3, D * 0.9, 22), (-46, -2, -22.5, 26, 30), (0.0, D + 0.3, W, D + 18, 19),
-              (-34, 36, -12, 62, 70), (W + 21, 46, W + 42, 76, 34), (-4, 58, 20, 80, 56)]
-    for i, (x0, y0, x1, y1, h) in enumerate(blocks):
-        add_box_obj(f"Context_Block_{i}", x0, y0, 0.0, x1, y1, h, ctx, coll)
-        add_box_obj(f"Context_Cornice_{i}", x0 - 0.5, y0 - 0.5, h - 0.2, x1 + 0.5, y1 + 0.5, h + 0.6, walk, coll)
+def build_context(coll, root):
+    """Streets with stone setts, paved sidewalks with granite curbs, lamp posts."""
+    road = MB()
+    road.box(-20000, -20000, -0.3, 20000, 20000, 0.0, "roof")
+    for f in road.bm.faces:
+        f.material_index = 0
+    mesh_obj("Street_Setts", road, coll, [MATS["setts"]])
+
+    walk = MB()
+
+    def paving(x0, y0, x1, y1, tile=1.5):
+        nx_, ny_ = max(1, round((x1 - x0) / tile)), max(1, round((y1 - y0) / tile))
+        tx_, ty_ = (x1 - x0) / nx_, (y1 - y0) / ny_
+        for i in range(nx_):
+            for j in range(ny_):
+                walk.box(x0 + i * tx_ + 0.008, y0 + j * ty_ + 0.008, 0.0,
+                         x0 + (i + 1) * tx_ - 0.008, y0 + (j + 1) * ty_ - 0.008, 0.15, "roof", bev=0.012)
+        walk.box(x0, y0, -0.05, x1, y1, 0.13, "roof")
+
+    def curb(x0, y0, x1, y1):
+        walk.box(x0, y0, -0.05, x1, y1, 0.17, "granite", bev=0.025)
+
+    SW = 4.0
+    # Wall St (south) and Nassau St (east) sidewalks on the Gillender side
+    paving(-80, -SW, W + SW, 0.0)
+    paving(W, 0.0, W + SW, 90.0)
+    curb(-80, -SW - 0.3, W + SW + 0.3, -SW)
+    curb(W + SW, -SW - 0.3, W + SW + 0.3, 90.0)
+    # opposite sidewalks
+    paving(-80, -SW - 14.0 - SW, W + SW + 14.0, -SW - 14.0)
+    paving(W + SW + 14.0, -SW - 14.0, W + SW + 14.0 + SW, 90.0)
+    curb(-80, -SW - 14.0, W + SW + 14.0, -SW - 13.7)
+    curb(W + SW + 13.7, -SW - 14.0, W + SW + 14.0, 90.0)
+    ob = mesh_obj("Sidewalks", walk, coll, [MATS["paving"]] + [MATS["granite"]])
+    for p in ob.data.polygons:
+        p.material_index = 1 if p.material_index == MI["granite"] else 0
+
+    A = Assembler(coll, root)
+    for x in (-40, -22, -4, W + 0.5):
+        A.put("SM_Lamp_Post", TR(x, -SW + 0.45, 0.15) @ RZ(90))
+    for y in (8, 26, 44):
+        A.put("SM_Lamp_Post", TR(W + SW - 0.45, y, 0.15))
+    for x in (-30, -10, W + 8):
+        A.put("SM_Lamp_Post", TR(x, -SW - 13.55, 0.15) @ RZ(90))
 
 
 def setup_world(kind):
@@ -1414,8 +1661,8 @@ def setup_world(kind):
         sky = nt.nodes.new("ShaderNodeTexSky")
         sky.sky_type = "NISHITA"
         sky.sun_disc = False
-        sky.sun_elevation = radians(38)
-        sky.sun_rotation = radians(215)
+        sky.sun_elevation = radians(39)
+        sky.sun_rotation = radians(67)
         sky.air_density = 1.2
         sky.dust_density = 2.5
         nt.links.new(sky.outputs["Color"], bg.inputs["Color"])
@@ -1423,16 +1670,40 @@ def setup_world(kind):
     else:
         bg.inputs["Color"].default_value = (0.045, 0.047, 0.05, 1)
         bg.inputs["Strength"].default_value = 1.0
+        bpy.context.scene.use_nodes = False
+
+
+def setup_haze(scene, on, color=(0.66, 0.72, 0.8), amount=0.32):
+    """Aerial perspective: blend the render toward a haze colour using the mist pass."""
+    scene.use_nodes = on
+    if not on:
+        return
+    scene.view_layers[0].use_pass_mist = True
+    ms = scene.world.mist_settings
+    ms.start, ms.depth, ms.falloff = 25.0, 900.0, "LINEAR"
+    nt = scene.node_tree
+    nt.nodes.clear()
+    rl = nt.nodes.new("CompositorNodeRLayers")
+    mul = nt.nodes.new("CompositorNodeMath")
+    mul.operation = "MULTIPLY"
+    mul.inputs[1].default_value = amount
+    nt.links.new(rl.outputs["Mist"], mul.inputs[0])
+    mix = nt.nodes.new("CompositorNodeMixRGB")
+    mix.inputs[2].default_value = (*color, 1)
+    nt.links.new(mul.outputs[0], mix.inputs[0])
+    nt.links.new(rl.outputs["Image"], mix.inputs[1])
+    comp = nt.nodes.new("CompositorNodeComposite")
+    nt.links.new(mix.outputs[0], comp.inputs["Image"])
 
 
 def add_sun(coll):
     sd = bpy.data.lights.new("Sun", "SUN")
-    sd.energy = 5.0
+    sd.energy = 6.0
     sd.angle = radians(1.5)
     sd.color = (1.0, 0.95, 0.88)
     sun = bpy.data.objects.new("Sun", sd)
     coll.objects.link(sun)
-    d = Vector((0.55, 0.8, -0.62)).normalized()
+    d = Vector((-0.72, -0.3, -0.62)).normalized()   # from the east-north-east, raking the long facade
     sun.rotation_euler = d.to_track_quat("-Z", "Y").to_euler()
     return sun
 
@@ -1534,24 +1805,31 @@ def main(argv):
     c_ctx = new_coll("Context")
     c_rig = new_coll("Lights_Cameras")
 
+    c_var = new_coll("Kit_Variants")
     build_kit(c_kit)
+    build_variants(c_var)
     root = bpy.data.objects.new("Gillender_Root", None)
     root.empty_display_type = "ARROWS"
     root.empty_display_size = 5
     c_bld.objects.link(root)
     count, top = assemble(c_bld, root)
-    print(f"[gillender] kit pieces: {len(KIT)}  instances: {count}  height: {top:.1f} m")
+    print(f"[gillender] kit pieces: {len(c_kit.objects)}  instances: {count}  height: {top:.1f} m")
 
-    build_context(c_ctx)
+    ctx_root = bpy.data.objects.new("Context_Root", None)
+    c_ctx.objects.link(ctx_root)
+    n_ctx = build_neighbours(c_ctx, ctx_root)
+    build_context(c_ctx, ctx_root)
+    print(f"[gillender] context instances: {n_ctx}")
     add_sun(c_rig)
-    hero = add_camera("CAM_Hero", (W + 56, -50, 32), (W * 0.5, D * 0.3, 46.5), 30, c_rig)
-    add_camera("CAM_Detail_Mid", (W + 17.6, -18, 52), (W, 0, 54), 40, c_rig)
-    add_camera("CAM_Detail_Top", (W / 2 + 19, -17, 87), (W / 2, 5.2, 83.5), 40, c_rig)
+    hero = add_camera("CAM_Hero", (W + 44, -46, 27), (W * 0.45, D * 0.3, 40.5), 30, c_rig)
+    add_camera("CAM_Photo", (W + 30, -36, 34), (W * 0.3, D * 0.35, 43), 28, c_rig)
+    add_camera("CAM_Detail_Mid", (W + 13.5, -14, 47), (W - 0.5, 0, 50.5), 40, c_rig)
+    add_camera("CAM_Detail_Top", (W / 2 + 14, -13, 75), (W / 2, 3.9, 72.5), 40, c_rig)
     scene.camera = hero
 
-    # kit sheet column layout to the left of the building (used by the breakdown shot)
+    # kit sheet column layout, parked away from the street scene
     kit_objs = list(c_kit.objects)
-    layout_kit(kit_objs, 2.0, 34.0)
+    layout_kit(kit_objs, -150.0, 34.0)
 
     if args.ref and os.path.exists(args.ref):
         img = bpy.data.images.load(args.ref)
@@ -1593,7 +1871,8 @@ def main(argv):
         scene.camera = bpy.data.objects["CAM_Hero"]
         setup_world("sky")
         for ob in bpy.data.objects:
-            ob.hide_render = ob.name == "Reference_Photo"
+            ob.hide_render = ob.name == "Reference_Photo" or ob.name in bpy.data.collections["Kit_Variants"].objects
+        setup_haze(scene, True)
 
     blend = os.path.join(args.out, "gillender_modular.blend")
     bpy.context.preferences.filepaths.save_version = 0
@@ -1645,12 +1924,15 @@ def render_all(args):
     cy.adaptive_threshold = 0.02
     cy.use_denoising = True
     cy.denoiser = "OPENIMAGEDENOISE"
-    cy.max_bounces = 6
+    cy.max_bounces = 8
+    cy.transmission_bounces = 6
+    cy.glossy_bounces = 4
+    cy.sample_clamp_indirect = 8.0
     scene.render.resolution_percentage = args.scale
     scene.render.image_settings.file_format = "PNG"
     scene.view_settings.view_transform = "AgX"
     scene.view_settings.look = "AgX - Medium High Contrast"
-    only = set(args.only.split(",")) if args.only else {"hero", "detail", "breakdown", "kit"}
+    only = set(args.only.split(",")) if args.only else {"hero", "photo", "detail", "breakdown", "kit"}
 
     def show(kit, bld, ctx, refv):
         for c, v in ((c_kit, kit), (c_bld, bld), (c_ctx, ctx)):
@@ -1666,14 +1948,19 @@ def render_all(args):
         bpy.ops.render.render(write_still=True)
         print("[gillender] rendered", path)
 
-    if "hero" in only or "detail" in only:
+    if only & {"hero", "photo", "detail"}:
         setup_world("sky")
+        setup_haze(scene, True)
         show(False, True, True, False)
         if "hero" in only:
             shot(bpy.data.objects["CAM_Hero"], (1200, 1600), "render_hero.png")
+        if "photo" in only:
+            shot(bpy.data.objects["CAM_Photo"], (1200, 1600), "render_photo_match.png")
         if "detail" in only:
+            setup_haze(scene, False)
             shot(bpy.data.objects["CAM_Detail_Mid"], (1200, 1200), "render_detail_mid.png")
             shot(bpy.data.objects["CAM_Detail_Top"], (1200, 1200), "render_detail_top.png")
+        setup_haze(scene, False)
 
     if "breakdown" in only:
         setup_world("studio")
